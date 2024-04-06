@@ -24,13 +24,11 @@ model:
   backbone_args:
     in_channels: 3
     output_stride: 32
-    weights: "imagenet"
+    weights: "full_imagenet"
   num_classes: 10
-  load: ""
   learning_rate: 3e-4
   weight_decay: 1e-4
   set_bn_eval: True
-  filter_late_install: True
   with_grad_filter: True
   filter_cfgs:
     filter_install:
@@ -66,8 +64,6 @@ model:
 data:
   data_dir: "./data/cifar10"
   name: "cifar10"
-  num_partitions: 2
-  iid: False
   batch_size: 128
   train_workers: 12
   val_workers: 12
