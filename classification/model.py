@@ -1,3 +1,4 @@
+# Bản của mình
 import os
 import numpy as np
 import torch as th
@@ -8,18 +9,17 @@ from custom_op.register import register_filter
 from util import freeze_layers
 from models.encoders import get_encoder
 
-
 class ClassificationModel(LightningModule):
-    def __init__(self, backbone: str, backbone_args, num_classes, load,
-                 learning_rate, weight_decay, set_bn_eval,
-                 with_grad_filter=False, filter_cfgs=-1, filter_late_install=True,
-                 freeze_cfgs=-1, use_sgd=False, momentum=0.9, anneling_steps=8008, scheduler_interval='step',
+    def __init__(self, backbone: str, backbone_args, num_classes, learning_rate, weight_decay, set_bn_eval,
+                 with_grad_filter=False, filter_cfgs=-1, freeze_cfgs=-1, use_sgd=False,
+                 momentum=0.9, anneling_steps=8008, scheduler_interval='step',
                  lr_warmup=0, init_lr_prod=0.25):
         super(ClassificationModel, self).__init__()
-        self.backbone = get_encoder(backbone, **backbone_args)
+    
+        self.backbone = get_encoder(backbone, **backbone_args) # Nếu weights (trong backbone_args) được định nghĩa (ssl hoặc sswl) thì load weight từ online về (trong models/encoders/resnet.py hoặc mcunet.py hoặc mobilenet.py)        
+        self.classifier = nn.Linear(self.backbone._out_channels[-1], num_classes)
+
         self.pooling = nn.AdaptiveAvgPool2d((1, 1))
-        self.classifier = nn.Linear(
-            self.backbone._out_channels[-1], num_classes)
         self.loss = nn.CrossEntropyLoss()
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
@@ -34,12 +34,8 @@ class ClassificationModel(LightningModule):
         self.scheduler_interval = scheduler_interval
         self.lr_warmup = lr_warmup
         self.init_lr_prod = init_lr_prod
-        if with_grad_filter and not filter_late_install:
-            register_filter(self, filter_cfgs)
-        if len(load) != 0:
-            state_dict = th.load(load)['state_dict']
-            self.load_state_dict(state_dict)
-        if with_grad_filter and filter_late_install:
+
+        if with_grad_filter:
             register_filter(self, filter_cfgs)
         freeze_layers(self, freeze_cfgs)
         self.acc.reset()
@@ -95,13 +91,13 @@ class ClassificationModel(LightningModule):
     def training_step(self, train_batch, batch_idx):
         if self.set_bn_eval:
             self.bn_eval()
-        img, label = train_batch['image'], train_batch['label']
+        img, label = train_batch['image'], train_batch['label'] # Lấy dữ liệu
         if img.shape[1] == 1:
             img = th.cat([img] * 3, dim=1)
-        logits = self.forward(img)
+        logits = self.forward(img) # Lấy output predict
         pred_cls = th.argmax(logits, dim=-1)
         acc = th.sum(pred_cls == label) / label.shape[0]
-        loss = self.loss(logits, label)
+        loss = self.loss(logits, label) # Tính loss giữa output predict và true output
         self.log("Train/Loss", loss)
         self.log("Train/Acc", acc)
         return {'loss': loss}

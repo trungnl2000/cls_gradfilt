@@ -15,7 +15,7 @@ encoders.update(mobilenet_encoders)
 encoders.update(mcunet_encoders)
 
 
-def get_encoder(name, in_channels=3, depth=5, weights=None, output_stride=32, **kwargs):
+def get_encoder(name, in_channels=3, depth=5, weights=None, output_stride=32, **kwargs): # pretrained là thuộc tính chỉ của mcunet (nó có thể thuộc kwargs)
 
     try:
         Encoder = encoders[name]["encoder"]
@@ -27,8 +27,7 @@ def get_encoder(name, in_channels=3, depth=5, weights=None, output_stride=32, **
     params.update(depth=depth)
     params.update(log_grad='log_grad' in kwargs and kwargs['log_grad'])
     encoder = Encoder(**params)
-
-    if weights is not None:
+    if weights is not None and weights != "full_imagenet":
         try:
             settings = encoders[name]["pretrained_settings"][weights]
         except KeyError:
@@ -39,9 +38,22 @@ def get_encoder(name, in_channels=3, depth=5, weights=None, output_stride=32, **
                     list(encoders[name]["pretrained_settings"].keys()),
                 )
             )
-        encoder.load_state_dict(model_zoo.load_url(settings["url"]))
-
-    encoder.set_in_channels(in_channels, pretrained=weights is not None)
+        encoder.load_state_dict(model_zoo.load_url(settings["url"]))    
+        
+    if weights == "full_imagenet":
+        if name == "resnet18":
+            model_state_dict = torch.load("pretrained_ckpts/pre_trained_resnet18_raw.ckpt")['state_dict']
+        elif name == "mobilenet_v2":
+            model_state_dict = torch.load("pretrained_ckpts/pre_trained_mbv2_raw.ckpt")['state_dict']
+        # elif name == "mcunet":  (Triển khai sau) (Không cần triển khai nữa vì họ đã tự load)
+        encoder.load_state_dict(model_state_dict)
+        
+    if "mcunet" in name:
+        assert "pretrained" in kwargs, "[Warning] pretrained condition is not defined for mcunet"
+        encoder.set_in_channels(in_channels, pretrained=kwargs["pretrained"])
+    else:
+        encoder.set_in_channels(in_channels, pretrained=weights is not None) # Có vẻ không đúng, vì mcunet là bản được pretrained nhưng weight trong file config họ không set, tức là = None => không pretrained (Đã sửa)
+    
     if output_stride != 32:
         encoder.make_dilated(output_stride)
 
