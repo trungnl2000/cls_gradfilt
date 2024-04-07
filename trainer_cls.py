@@ -30,7 +30,7 @@ class CLI(LightningCLI):
 
 
 def run():
-    cli = CLI(ClassificationModel, ClsDataset, run=False, save_config_overwrite=True, seed_everything_default=233) # Dùng cli để load model và file config cho model
+    cli = CLI(ClassificationModel, ClsDataset, run=False, save_config_overwrite=True) # Dùng cli để load model và file config cho model
     model = cli.model # Khởi tạo model từ cli
     trainer = cli.trainer # Khởi tạo trainer từ cli
     data = cli.datamodule # Khởi tạo data từ cli
