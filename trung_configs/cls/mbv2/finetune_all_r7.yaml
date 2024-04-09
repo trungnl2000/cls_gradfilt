@@ -1,0 +1,99 @@
+trainer:
+  gpus: 1
+  gradient_clip_val: 1.0
+  max_epochs: 20
+  log_every_n_steps: 5
+  num_sanity_val_steps: 0
+  callbacks:
+    - class_path: pytorch_lightning.callbacks.LearningRateMonitor
+      init_args:
+        logging_interval: 'epoch'
+    - class_path: pytorch_lightning.callbacks.GPUStatsMonitor
+      init_args:
+        fan_speed: True
+        temperature: True
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+        save_top_k: 1
+        save_last: True
+        monitor: "val-acc"
+        mode: 'max'
+        filename: "{epoch:02d}-{val-acc:.3f}"
+model:
+  backbone: 'mobilenet_v2'
+  backbone_args:
+    in_channels: 3
+    output_stride: 32
+    weights: "full_imagenet"
+  learning_rate: 3e-4
+  weight_decay: 1e-4
+  set_bn_eval: True
+  with_grad_filter: False
+  filter_cfgs:
+    filter_install:
+      - path: "backbone.features.18"
+        radius: 7
+        type: "ConvNormActivation"
+      - path: "backbone.features.17"
+        radius: 7
+        type: "InvertedResidual"
+      - path: "backbone.features.16"
+        radius: 7
+        type: "InvertedResidual"
+      - path: "backbone.features.15"
+        radius: 7
+        type: "InvertedResidual"
+      - path: "backbone.features.14"
+        radius: 7
+        type: "InvertedResidual"
+      - path: "backbone.features.13"
+        radius: 7
+        type: "InvertedResidual"
+      - path: "backbone.features.12"
+        radius: 7
+        type: "InvertedResidual"
+      - path: "backbone.features.11"
+        radius: 7
+        type: "InvertedResidual"
+      - path: "backbone.features.10"
+        radius: 7
+        type: "InvertedResidual"
+      - path: "backbone.features.9"
+        radius: 7
+        type: "InvertedResidual"
+      - path: "backbone.features.8"
+        radius: 7
+        type: "InvertedResidual"
+      - path: "backbone.features.7"
+        radius: 7
+        type: "InvertedResidual"
+      - path: "backbone.features.6"
+        radius: 7
+        type: "InvertedResidual"
+      - path: "backbone.features.5"
+        radius: 7
+        type: "InvertedResidual"
+      - path: "backbone.features.4"
+        radius: 7
+        type: "InvertedResidual"
+      - path: "backbone.features.3"
+        radius: 7
+        type: "InvertedResidual"
+      - path: "backbone.features.2"
+        radius: 7
+        type: "InvertedResidual"
+      - path: "backbone.features.1"
+        radius: 7
+        type: "InvertedResidual"
+      - path: "backbone.features.0"
+        radius: 7
+        type: "ConvNormActivation"
+data:
+  data_dir: "./data/cifar10"
+  name: "cifar10"
+  batch_size: 128
+  train_workers: 12
+  val_workers: 12
+logger:
+  save_dir: "runs/cls/mbv2"
+  exp_name: "finetune_all"

@@ -14,7 +14,7 @@ trainer:
         temperature: True
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
-        save_top_k: 2
+        save_top_k: 1
         save_last: True
         monitor: "val-acc"
         mode: 'max'
@@ -32,9 +32,12 @@ model:
   with_grad_filter: True
   filter_cfgs:
     filter_install:
-      - path: "backbone.model.14"
+      - path: "backbone.model.14.mobile_inverted_conv.point_linear.conv"
         radius: 7
-        type: "MCUNetBlock"
+        type: "conv"
+      - path: "backbone.model.14.mobile_inverted_conv.depth_conv.conv"
+        radius: 7
+        type: "conv"
   freeze_cfgs:
     - path: "backbone model [0]"
     - path: "backbone model [1]"

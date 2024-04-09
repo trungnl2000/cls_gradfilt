@@ -14,7 +14,7 @@ trainer:
         temperature: True
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
-        save_top_k: 2
+        save_top_k: 1
         save_last: True
         monitor: "val-acc"
         mode: 'max'
@@ -32,19 +32,25 @@ model:
   with_grad_filter: True
   filter_cfgs:
     filter_install:
-      - path: "backbone.layer4"
+      - path: "backbone.layer4.1.conv2"
         radius: 4
-        type: "resnet_layer"
-      - path: "backbone.layer3"
+        type: "conv"
+      - path: "backbone.layer4.1.conv1"
         radius: 4
-        type: "resnet_layer"
+        type: "conv"
+      - path: "backbone.layer4.0.downsample.0"
+        radius: 4
+        type: "conv"
+      - path: "backbone.layer4.0.conv2"
+        radius: 4
+        type: "conv"
   freeze_cfgs:
     - path: "backbone conv1"
     - path: "backbone bn1"
     - path: "backbone layer1"
     - path: "backbone layer2"
     - path: "backbone layer3"
-    - path: "backbone layer4 [0] downsample"
+    - path: "backbone layer4 [0] conv1"
 data:
   data_dir: "./data/cifar10"
   name: "cifar10"

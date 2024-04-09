@@ -36,13 +36,16 @@ def add_grad_filter(module: nn.Module, cfg):
         for i in range(count - 2):
             module.conv[i][0] = wrap_conv_layer(module.conv[i][0], cfg['radius'], True)
     elif cfg['type'] == "MCUNetBlock":
-        if hasattr(module.mobile_inverted_conv, 'inverted_bottleneck'):
+        # if hasattr(module.mobile_inverted_conv, 'inverted_bottleneck'):
+        if module.mobile_inverted_conv.inverted_bottleneck is not None:
             module.mobile_inverted_conv.inverted_bottleneck.conv = wrap_conv_layer(
                 module.mobile_inverted_conv.inverted_bottleneck.conv, cfg['radius'], True)
-        if hasattr(module.mobile_inverted_conv, 'depth_conv'):
+        # if hasattr(module.mobile_inverted_conv, 'depth_conv'):
+        if module.mobile_inverted_conv.depth_conv is not None:
             module.mobile_inverted_conv.depth_conv.conv = wrap_conv_layer(
                 module.mobile_inverted_conv.depth_conv.conv, cfg['radius'], True)
-        if hasattr(module.mobile_inverted_conv, 'point_linear'):
+        # if hasattr(module.mobile_inverted_conv, 'point_linear'):
+        if module.mobile_inverted_conv.point_linear is not None:
             module.mobile_inverted_conv.point_linear.conv = wrap_conv_layer(
                 module.mobile_inverted_conv.point_linear.conv, cfg['radius'], True)
     elif cfg['type'] == 'conv':

@@ -17,7 +17,7 @@ class Conv2dAvgOp(Function):
         x_h, x_w = x.shape[-2:]
         k_h, k_w = weight.shape[-2:]
         y = conv2d(x, weight, bias, stride, padding,
-                   dilation=dilation, groups=groups)
+                   dilation=dilation, groups=groups)  # Quá trình forward diễn ra bình thường, khác biệt nằm ở backward
         h, w = y.shape[-2:]
         p_h, p_w = ceil(h / order), ceil(w / order)
         weight_sum = weight.sum(dim=(-1, -2))
