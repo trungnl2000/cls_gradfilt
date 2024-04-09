@@ -1,0 +1,10 @@
+bash trung_scripts/mbv2/c10_mbv2_finetune_all.sh
+bash trung_scripts/mbv2/c10_mbv2_finetune_all_r.sh
+bash trung_scripts/mbv2/c10_mbv2_r2.sh
+bash trung_scripts/mbv2/c10_mbv2_r4.sh
+bash trung_scripts/mbv2/c10_mbv2_r7.sh
+bash trung_scripts/mbv2/c100_mbv2_finetune_all.sh
+bash trung_scripts/mbv2/c100_mbv2_finetune_all_r.sh
+bash trung_scripts/mbv2/c100_mbv2_r2.sh
+bash trung_scripts/mbv2/c100_mbv2_r4.sh
+bash trung_scripts/mbv2/c100_mbv2_r7.sh
