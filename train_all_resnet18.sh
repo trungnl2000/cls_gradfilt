@@ -1,10 +1,12 @@
 bash trung_scripts/resnet18/c10_resnet18_finetune_all.sh
 bash trung_scripts/resnet18/c10_resnet18_finetune_all_r.sh
+bash trung_scripts/resnet18/c10_resnet18_base.sh
 bash trung_scripts/resnet18/c10_resnet18_r2.sh
 bash trung_scripts/resnet18/c10_resnet18_r4.sh
 bash trung_scripts/resnet18/c10_resnet18_r7.sh
 bash trung_scripts/resnet18/c100_resnet18_finetune_all.sh
 bash trung_scripts/resnet18/c100_resnet18_finetune_all_r.sh
+bash trung_scripts/resnet18/c100_resnet18_base.sh
 bash trung_scripts/resnet18/c100_resnet18_r2.sh
 bash trung_scripts/resnet18/c100_resnet18_r4.sh
 bash trung_scripts/resnet18/c100_resnet18_r7.sh

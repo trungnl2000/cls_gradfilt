@@ -35,7 +35,7 @@ model:
       - path: "backbone.model.14"
         radius: 4
         type: "MCUNetBlock"
-      - path: "backbone.model.13.point_linear.conv"
+      - path: "backbone.model.13.mobile_inverted_conv.point_linear.conv"
         radius: 4
         type: "conv"
   freeze_cfgs:

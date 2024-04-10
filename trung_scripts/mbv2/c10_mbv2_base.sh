@@ -12,6 +12,6 @@ common_args="$trainer_args $data_args $model_args $logger_args $seed_args"
 echo $common_args
 
 python trainer_cls.py --config trung_configs/cls/mbv2/filt_last1_r7.yaml ${common_args} --logger.exp_name base_l1_${usr_group_kl} --model.with_grad_filter False
-# python trainer_cls.py --config trung_configs/cls/mbv2/filt_last2_r7.yaml ${common_args} --logger.exp_name base_l2_${usr_group_kl} --model.with_grad_filter False
-# python trainer_cls.py --config trung_configs/cls/mbv2/filt_last3_r7.yaml ${common_args} --logger.exp_name base_l3_${usr_group_kl} --model.with_grad_filter False
-# python trainer_cls.py --config trung_configs/cls/mbv2/filt_last4_r7.yaml ${common_args} --logger.exp_name base_l4_${usr_group_kl} --model.with_grad_filter False
+python trainer_cls.py --config trung_configs/cls/mbv2/filt_last2_r7.yaml ${common_args} --logger.exp_name base_l2_${usr_group_kl} --model.with_grad_filter False
+python trainer_cls.py --config trung_configs/cls/mbv2/filt_last3_r7.yaml ${common_args} --logger.exp_name base_l3_${usr_group_kl} --model.with_grad_filter False
+python trainer_cls.py --config trung_configs/cls/mbv2/filt_last4_r7.yaml ${common_args} --logger.exp_name base_l4_${usr_group_kl} --model.with_grad_filter False
