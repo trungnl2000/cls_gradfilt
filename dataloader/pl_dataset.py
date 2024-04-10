@@ -82,11 +82,11 @@ class ClsDataset(LightningDataModule):
 
     def train_dataloader(self):
         return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=self.train_shuffle,
-                          num_workers=self.train_workers, pin_memory=False)
+                          num_workers=self.train_workers, pin_memory=False, drop_last=True)
 
     def val_dataloader(self):
         return DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=False,
-                          num_workers=self.val_workers, pin_memory=False)
+                          num_workers=self.val_workers, pin_memory=False, drop_last=True)
 
     def predict_dataloader(self):
         return DataLoader(self.val_dataset, batch_size=1, shuffle=False,

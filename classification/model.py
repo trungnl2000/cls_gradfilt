@@ -6,12 +6,14 @@ import torch.nn as nn
 from pytorch_lightning import LightningModule
 from torchmetrics import Accuracy
 from custom_op.register import register_filter
-from util import freeze_layers
+from custom_op.conv_avg import Conv2dAvg
+from util import freeze_layers, get_total_weight_size, Conv2dSizeHook, register_hook_for_conv, get_all_conv, get_active_conv
+from math import ceil
 from models.encoders import get_encoder
 
 class ClassificationModel(LightningModule):
     def __init__(self, backbone: str, backbone_args, num_classes, learning_rate, weight_decay, set_bn_eval,
-                 with_grad_filter=False, filter_cfgs=-1, freeze_cfgs=-1, use_sgd=False,
+                 with_grad_filter=False, filter_cfgs=-1, freeze_cfgs=None, use_sgd=False,
                  momentum=0.9, anneling_steps=8008, scheduler_interval='step',
                  lr_warmup=0, init_lr_prod=0.25):
         super(ClassificationModel, self).__init__()
@@ -35,11 +37,66 @@ class ClassificationModel(LightningModule):
         self.lr_warmup = lr_warmup
         self.init_lr_prod = init_lr_prod
 
+        self.radius = None
+        self.hook = Conv2dSizeHook()
+        
+        print("Before registering filter: Weight size: ", get_total_weight_size(self))
+
         if with_grad_filter:
+            self.radius = filter_cfgs['filter_install'][0]['radius']
             register_filter(self, filter_cfgs)
+            print("After registering filter: Weight size: ", get_total_weight_size(self))
+
+        register_hook_for_conv(self, self.hook, consider_active_only=True, freeze_cfgs=self.freeze_cfgs)
+
+
         freeze_layers(self, freeze_cfgs)
         self.acc.reset()
+        
+    def get_activation_size(self, consider_active_only=False, element_size=4, unit="MB"): # element_size = 4 bytes
+        if not consider_active_only:
+            conv2d_layers = get_all_conv(self)
+        else:
+            if self.freeze_cfgs == None:
+                conv2d_layers = get_all_conv(self)
+            else:
+                conv2d_layers = get_active_conv(self, self.freeze_cfgs)
 
+        input_sizes = self.hook.input_size
+        output_sizes = self.hook.output_size
+        num_element = 0
+        idx = 0
+        for key, input_size in input_sizes.items():
+            input_size = th.tensor(input_size)
+            stride = conv2d_layers[idx].stride
+            x_h, x_w = input_size[-2:]
+            h, w = output_sizes[key][-2:]
+
+            if isinstance(key, Conv2dAvg): # Nếu key là Conv2dAVG    
+                p_h, p_w = ceil(h / self.radius), ceil(w / self.radius)
+                x_order_h, x_order_w = self.radius * stride[0], self.radius * stride[1]
+                x_pad_h, x_pad_w = ceil((p_h * x_order_h - x_h) / 2), ceil((p_w * x_order_w - x_w) / 2)
+
+                x_sum_height = ((x_h + 2 * x_pad_h - x_order_h) // x_order_h) + 1
+                x_sum_width = ((x_w + 2 * x_pad_w - x_order_w) // x_order_w) + 1
+
+                num_element += int(1 * input_size[1] * x_sum_height * x_sum_width) # Bỏ qua số batch
+
+            elif isinstance(key, nn.modules.conv.Conv2d): # Nếu key là Conv2d
+                # padding_size = key.padding
+                # kernel_size = key.kernel_size
+                # x_height = ((x_h + 2 * padding_size[0] - kernel_size[0]) // stride[0]) + 1
+                # x_width = ((x_w + 2 * padding_size[1] - kernel_size[1]) // stride[1]) + 1
+                # num_element += int(1 * input_size[1] * x_height * x_width) # Bỏ qua số batch
+                num_element += int(1 * input_size[1] * input_size[2] * input_size[3]) # Bỏ qua số batch, Lưu luôn như này do trong hàm forward của convavg, nó lưu thẳng x sau forward
+            idx += 1
+        if unit == "MB":
+            return str(round(num_element*element_size/(1024*1024), 2)) + " MB"
+        elif unit == "KB":
+            return str(round(num_element*element_size/(1024), 2)) + " KB"
+        else:
+            raise ValueError("Unit is not suitable")
+    
     def register_filter(self):
         register_filter(self, self.filter_cfgs)
 

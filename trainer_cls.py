@@ -36,15 +36,9 @@ def run():
     data = cli.datamodule # Khởi tạo data từ cli
     # logging.info(str(model))
     trainer.validate(model, datamodule=data)
-    trainer.fit(model, data)
-    trainer.validate(model, datamodule=data)
-
-    # import torch
-    # current_seed = torch.initial_seed()
-    # print("Current Seed:", current_seed)
-    # import numpy as np
-    # current_seed = np.random.get_state()[1][0]
-    # print("Current Seed:", current_seed)
+    print("activation size: ", model.get_activation_size(consider_active_only=True))
+    # trainer.fit(model, data)
+    # trainer.validate(model, datamodule=data)
 
 
 run()
