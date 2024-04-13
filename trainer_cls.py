@@ -3,6 +3,7 @@ from pytorch_lightning.utilities.cli import LightningCLI
 from pytorch_lightning.loggers import TensorBoardLogger
 from classification.model import ClassificationModel
 from dataloader.pl_dataset import ClsDataset
+import torch
 
 logging.basicConfig(level=logging.INFO)
 
@@ -25,9 +26,11 @@ class CLI(LightningCLI):
             kwargs.pop('logger_postfix')
         logger = TensorBoardLogger(cfg['logger']['save_dir'], logger_name)
         kwargs['logger'] = logger
+        
+        # kwargs['accelerator']='gpu'
+        # kwargs['devices']="auto"
         trainer = super(CLI, self).instantiate_trainer(**kwargs)
         return trainer
-
 
 def run():
     cli = CLI(ClassificationModel, ClsDataset, run=False, save_config_overwrite=True) # Dùng cli để load model và file config cho model
@@ -35,10 +38,13 @@ def run():
     trainer = cli.trainer # Khởi tạo trainer từ cli
     data = cli.datamodule # Khởi tạo data từ cli
     # logging.info(str(model))
+
+    train_data_size = torch.tensor([3, data.width, data.height]) # 3 kênh màu, data.width x data.height kích thước
+    logging.info(f"activation size: {model.get_activation_size(consider_active_only=True, unit='KB', train_data_size=train_data_size)}") # Dùng cho kiểu hook mới
+
     trainer.validate(model, datamodule=data)
-    print("activation size: ", model.get_activation_size(consider_active_only=True))
-    # trainer.fit(model, data)
-    # trainer.validate(model, datamodule=data)
+    trainer.fit(model, data)
+    trainer.validate(model, datamodule=data)
 
 
 run()

@@ -13,11 +13,10 @@ class Conv2dAvgOp(Function):
 
     @staticmethod
     def forward(ctx: Any, *args: Any, **kwargs: Any) -> Any:
-        x, weight, bias, stride, dilation, padding, order, groups = args
+        x, weight, bias, stride, dilation, padding, order, groups = args # Thứ tự này tuân theo khi dùng Conv2dAvgOp.apply ở bên dưới
         x_h, x_w = x.shape[-2:]
         k_h, k_w = weight.shape[-2:]
-        y = conv2d(x, weight, bias, stride, padding,
-                   dilation=dilation, groups=groups)  # Quá trình forward diễn ra bình thường, khác biệt nằm ở backward
+        y = conv2d(x, weight, bias, stride, padding, dilation=dilation, groups=groups)  # Quá trình forward diễn ra bình thường, khác biệt nằm ở backward
         h, w = y.shape[-2:]
         p_h, p_w = ceil(h / order), ceil(w / order)
         weight_sum = weight.sum(dim=(-1, -2))
@@ -87,8 +86,7 @@ class Conv2dDilatedOp(Function):
         x, weight, bias, stride, dilation, padding, order, groups = args
         x_h, x_w = x.shape[-2:]
         k_h, k_w = weight.shape[-2:]
-        y = conv2d(x, weight, bias, stride, padding,
-                   dilation=dilation, groups=groups)
+        y = conv2d(x, weight, bias, stride, padding, dilation=dilation, groups=groups)
         h, w = y.shape[-2:]
         p_h, p_w = ceil(h / order), ceil(w / order)
         x_order_h, x_order_w = order * stride[0], order * stride[1]

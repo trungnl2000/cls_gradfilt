@@ -11,7 +11,7 @@ common_args="$trainer_args $data_args $model_args $logger_args $seed_args"
 
 echo $common_args
 
-python trainer_cls.py --config trung_configs/cls/res18/filt_last1_r2.yaml ${common_args} --logger.exp_name filt_l1_r2_${usr_group_kl} --model.with_grad_filter True
-python trainer_cls.py --config trung_configs/cls/res18/filt_last2_r2.yaml ${common_args} --logger.exp_name filt_l2_r2_${usr_group_kl} --model.with_grad_filter True
-python trainer_cls.py --config trung_configs/cls/res18/filt_last3_r2.yaml ${common_args} --logger.exp_name filt_l3_r2_${usr_group_kl} --model.with_grad_filter True
+# python trainer_cls.py --config trung_configs/cls/res18/filt_last1_r2.yaml ${common_args} --logger.exp_name filt_l1_r2_${usr_group_kl} --model.with_grad_filter True
+# python trainer_cls.py --config trung_configs/cls/res18/filt_last2_r2.yaml ${common_args} --logger.exp_name filt_l2_r2_${usr_group_kl} --model.with_grad_filter True
+# python trainer_cls.py --config trung_configs/cls/res18/filt_last3_r2.yaml ${common_args} --logger.exp_name filt_l3_r2_${usr_group_kl} --model.with_grad_filter True
 python trainer_cls.py --config trung_configs/cls/res18/filt_last4_r2.yaml ${common_args} --logger.exp_name filt_l4_r2_${usr_group_kl} --model.with_grad_filter True

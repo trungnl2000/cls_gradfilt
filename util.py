@@ -1,8 +1,9 @@
 from math import ceil
-import custom_op
 import torch.nn as nn
 import re
 from custom_op.conv_avg import Conv2dAvg
+from custom_op.conv_svd import Conv2dSVD
+import torch
 
 def freeze_layers(module, freeze_cfgs):
     if not isinstance(freeze_cfgs, list):
@@ -30,20 +31,10 @@ def grad_logger(dst, name):
     return hook
 
 ## Hàm của mình
-
-class Conv2dSizeHook:
-    def __init__(self):
-        self.input_size = {}
-        self.output_size = {}
-
-    def __call__(self, module, input, output):
-        self.input_size[module] = input[0].shape #input[0].size()[2:]
-        self.output_size[module] = output.shape
-
 def get_all_conv(model):
     conv_layers = []
     for name, mod in model.named_modules():
-        if isinstance(mod, nn.modules.conv.Conv2d) or isinstance(mod, Conv2dAvg): # Nếu mod là Conv2d hoặc Conv2dAvg
+        if isinstance(mod, nn.modules.conv.Conv2d) or isinstance(mod, Conv2dAvg) or isinstance(mod, Conv2dSVD): # Nếu mod là Conv2d hoặc Conv2dAvg hoặc Conv2dSVD
             conv_layers.append(mod)
     return conv_layers
 
@@ -61,30 +52,38 @@ def get_active_conv(model, freeze_cfgs):
         active_conv_layers = []
         # active_conv_layers = {}
         for name, mod in model.named_modules():
-            if isinstance(mod, nn.modules.conv.Conv2d) or isinstance(mod, Conv2dAvg): # Nếu mod là Conv2d hoặc Conv2dAvg
+            if isinstance(mod, nn.modules.conv.Conv2d) or isinstance(mod, Conv2dAvg)  or isinstance(mod, Conv2dSVD): # Nếu mod là Conv2d hoặc Conv2dAvg hoặc Conv2dSVD
                 if not any(re.match(f"^{prefix}(?:\\.|$)", name) for prefix in list_freeze_cfgs): # Module đang xét không thuộc danh sách freeze
                     active_conv_layers.append(mod)
                     # active_conv_layers[name] = mod
         return active_conv_layers
+    
 
 def get_total_weight_size(model, element_size=4): # element_size = 4 bytes
     def _is_depthwise_conv(conv):
         return conv.groups == conv.in_channels == conv.out_channels
-    
-    conv_layers = get_all_conv(model)
 
+    conv_layers = get_all_conv(model)
     this_num_weight = 0
     for conv_layer in conv_layers:
         # if "Conv2dAvg" in str(type(conv_layer)):
         if _is_depthwise_conv(conv_layer):  # depthwise
             weight_shape = conv_layer.weight.shape  # o, 1, k, k
-            if isinstance(conv_layer, Conv2dAvg): # Nếu là conv2davg
+            if isinstance(conv_layer, Conv2dAvg): # Nếu là conv2dAvg
                 this_num_weight += conv_layer.in_channels * 1 * 1
+            elif isinstance(conv_layer, Conv2dSVD):
+                this_num_weight += conv_layer.in_channels * weight_shape[2] * weight_shape[3] ############
             else: # normal conv2d
                 this_num_weight += conv_layer.in_channels * weight_shape[2] * weight_shape[3]
         elif isinstance(conv_layer, Conv2dAvg): # nếu là Conv2dAvg mà không phải depthwise
             weight_shape = conv_layer.weight.shape
             this_num_weight += weight_shape[0] * weight_shape[1] * 1 * 1 # Bỏ 2 dimension sau vì cái lớp này tính sum của ma trận weight
+        elif isinstance(conv_layer, Conv2dSVD): ################################
+            weight_shape = conv_layer.weight.shape
+            if conv_layer.groups == 1:  # normal conv
+                this_num_weight += (weight_shape[0] * weight_shape[1] * weight_shape[2] * weight_shape[3])
+            else:  # group conv (lite residual)
+                this_num_weight += conv_layer.weight.data.numel() # Not sure
         else: # Không depthwise lẫn Conv2dAvg
             weight_shape = conv_layer.weight.shape
             if conv_layer.groups == 1:  # normal conv
@@ -93,6 +92,20 @@ def get_total_weight_size(model, element_size=4): # element_size = 4 bytes
                 this_num_weight += conv_layer.weight.data.numel() # Not sure
                 
     return str(round(this_num_weight*element_size/(1024*1024), 2)) + " MB"
+
+class Conv2dSizeHook:
+    def __init__(self):
+        self.input_size = {}
+        self.output_size = {}
+        self.active = True
+    def __call__(self, module, input, output):
+        if not self.active:
+            return
+        self.input_size[module] = input[0].shape
+        self.output_size[module] = output.shape
+
+    def activate(self, active):
+        self.active = active
 
 def register_hook_for_conv(model, hook_size, consider_active_only=False, freeze_cfgs=None):
     '''
@@ -114,6 +127,77 @@ def register_hook_for_conv(model, hook_size, consider_active_only=False, freeze_
     for conv_layer in  conv_layers:
         conv_layer.register_forward_hook(hook_size)
 
+########## Phiên bản hook khác ##########
+
+def get_all_conv_with_name(model):
+    conv_layers = {}
+    for name, mod in model.named_modules():
+        if isinstance(mod, nn.modules.conv.Conv2d) or isinstance(mod, Conv2dAvg) or isinstance(mod, Conv2dSVD): # Nếu mod là Conv2d hoặc Conv2dAvg hoặc Conv2dSVD
+            conv_layers[name] = mod
+    return conv_layers
+    
+# def get_active_conv_with_name(model, freeze_cfgs):
+#     if freeze_cfgs == None:
+#         return get_all_conv_with_name(model)
+#     else:
+#         list_freeze_cfgs = []
+#         for cfg in freeze_cfgs:
+#             path = cfg['path'].replace(" ", ".")
+#             if '[' in path or ']' in path:
+#                 path = path.replace("[", "").replace("]", "")
+#             list_freeze_cfgs.append(path)
+
+#         active_conv_layers = {}
+#         for name, mod in model.named_modules():
+#             if isinstance(mod, nn.modules.conv.Conv2d) or isinstance(mod, Conv2dAvg)  or isinstance(mod, Conv2dSVD): # Nếu mod là Conv2d hoặc Conv2dAvg hoặc Conv2dSVD
+#                 if not any(re.match(f"^{prefix}(?:\\.|$)", name) for prefix in list_freeze_cfgs): # Module đang xét không thuộc danh sách freeze
+#                     active_conv_layers[name] = mod
+#         return active_conv_layers
+
+def get_active_conv_with_name(model):
+    total_conv_layer = get_all_conv_with_name(model)
+    if model.num_of_finetune == "all" or model.num_of_finetune > len(total_conv_layer):
+        return total_conv_layer
+    elif model.num_of_finetune == None or model.num_of_finetune == 0:
+        return -1 # Không có conv layer nào được finetuned
+    else:
+        active_conv_layers = dict(list(total_conv_layer.items())[-model.num_of_finetune:]) # Chỉ áp dụng filter vào num_of_finetune conv2d layer cuối
+        return active_conv_layers
+
+class Hook: # Lưu lại các input/output size của mô hình
+    def __init__(self, module):
+        self.module = module
+        self.input_size = torch.zeros(4)
+        self.output_size = torch.zeros(4)
+        self.active = True
+        self.hook = module.register_forward_hook(self.hook_fn)
+    def hook_fn(self, module, input, output):
+        if not self.active:
+            return
+        self.input_size = input[0].shape #input[0].size()[2:] # Do input feed theo định dạng tuple vì nó là batch
+        self.output_size = output.shape
+    def activate(self, active):
+        self.active = active
+    def remove(self):
+        self.active = False
+        self.hook.remove()
+
+def attach_hooks_for_conv(model, consider_active_only=False):
+    '''
+    model: Mô hình
+    consider_active_only: True - Chỉ consider các lớp active khi finetune | False - Consider tất
+    model.freeze_cfgs: cấu hình xem các lớp nào bị freeze, được định nghĩa trong folder trung_configs
+
+    => Hàm này đăng kí hook cho model để lưu lại input/output size tại mỗi lớp convolution
+    '''
+    if not consider_active_only:
+        conv_layers = get_all_conv_with_name(model)
+    else:
+        conv_layers = get_active_conv_with_name(model)
+    assert conv_layers != -1, "[Warning] Consider activate conv2d only but no conv2d is finetuned => No hook is attached !!"
+
+    for name, mod in  conv_layers.items():
+        model.hook[name] = Hook(mod) # attribute hook trong model là dict
 
 # def get_activation_size(model, hook_size, radius, consider_active_only=False, freeze_cfgs=None, element_size=4, unit="MB"): # element_size = 4 bytes
 #     if not consider_active_only:
