@@ -181,6 +181,7 @@ class Hook: # Lưu lại các input/output size của mô hình
     def remove(self):
         self.active = False
         self.hook.remove()
+        # print("Hook is removed")
 
 def attach_hooks_for_conv(model, consider_active_only=False):
     '''

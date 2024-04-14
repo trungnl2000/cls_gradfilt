@@ -28,7 +28,6 @@ model:
   learning_rate: 3e-4
   weight_decay: 1e-4
   set_bn_eval: True
-  with_grad_filter: True
   num_of_finetune: 1
   filt_radius: 2
 data:

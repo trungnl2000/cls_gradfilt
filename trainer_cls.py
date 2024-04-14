@@ -41,6 +41,7 @@ def run():
 
     train_data_size = torch.tensor([3, data.width, data.height]) # 3 kênh màu, data.width x data.height kích thước
     logging.info(f"activation size: {model.get_activation_size(consider_active_only=True, unit='KB', train_data_size=train_data_size)}") # Dùng cho kiểu hook mới
+    # logging.info(f"FLOPs: {model.compute_Conv2d_flops(consider_active_only=True, unit='MB', train_data_size=train_data_size)}") # Dùng cho kiểu hook mới
 
     trainer.validate(model, datamodule=data)
     trainer.fit(model, data)
