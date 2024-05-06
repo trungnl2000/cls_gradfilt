@@ -2,7 +2,7 @@ import logging
 from pytorch_lightning.utilities.cli import LightningCLI
 from pytorch_lightning.loggers import TensorBoardLogger
 from classification.model import ClassificationModel
-from dataloader.pl_dataset import ClsDataset
+from dataloader.pl_dataset_their import ClsDataset
 import torch
 
 logging.basicConfig(level=logging.INFO)
@@ -45,12 +45,12 @@ def run():
     
     # attach_hooks_for_conv(model, True)
     # model.activate_hooks(True)
-    # trainer.validate(model, datamodule=data)
+    trainer.validate(model, datamodule=data)
 
-    logging.info(f"activation size: {model.get_activation_size(trainer, data, consider_active_only=True, unit='Byte')}") # Dùng cho kiểu hook mới
+    # logging.info(f"activation size: {model.get_activation_size(trainer, data, consider_active_only=True, unit='Byte')}") # Dùng cho kiểu hook mới
 
-    # trainer.fit(model, data)
-    # trainer.validate(model, datamodule=data)
+    trainer.fit(model, data)
+    trainer.validate(model, datamodule=data)
 
 
 run()

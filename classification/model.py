@@ -5,9 +5,8 @@ import torch as th
 import torch.nn as nn
 from pytorch_lightning import LightningModule
 from torchmetrics import Accuracy
-from custom_op.register import register_filter, register_SVD, register_SVD_with_var, register_conv_batch, register_HOSVD_with_var
+from custom_op.register import register_filter, register_SVD_with_var, register_conv_batch, register_HOSVD_with_var
 from custom_op.conv_avg import Conv2dAvg
-from custom_op.conv_svd import Conv2dSVD
 from custom_op.conv_svd_with_var import Conv2dSVD_with_var
 from custom_op.conv_avg_batch import Conv2d_Avg_Batch
 from custom_op.conv_hosvd_with_var import Conv2dHOSVD_with_var
@@ -18,30 +17,47 @@ from functools import reduce
 import logging
 
 class ClassificationModel(LightningModule):
-    def __init__(self, backbone: str, backbone_args, num_classes, learning_rate, weight_decay, set_bn_eval,
-                 num_of_finetune=None, with_avg_batch=False, with_HOSVD_with_var_compression = False, with_SVD_with_var_compression=False, with_SVD_compression=False, with_grad_filter=False, SVD_var=None, truncated_SVD_k=None, filt_radius=None, use_sgd=False,
-                 momentum=0.9, anneling_steps=8008, scheduler_interval='step',
+    def __init__(self, backbone: str, backbone_args, num_classes, load,
+                 learning_rate, weight_decay, set_bn_eval,
+
+                 num_of_finetune=None, 
+                 with_avg_batch=False, with_HOSVD_with_var_compression = False, with_SVD_with_var_compression=False, with_grad_filter=False,
+                 SVD_var=None, filt_radius=None,
+                 
+                 use_sgd=False, momentum=0.9, anneling_steps=8008, scheduler_interval='step',
                  lr_warmup=0, init_lr_prod=0.25):
         super(ClassificationModel, self).__init__()
     
         self.backbone = get_encoder(backbone, **backbone_args) # Nếu weights (trong backbone_args) được định nghĩa (ssl hoặc sswl) thì load weight từ online về (trong models/encoders/resnet.py hoặc mcunet.py hoặc mobilenet.py)        
-        self.classifier = nn.Linear(self.backbone._out_channels[-1], num_classes)
-
         self.pooling = nn.AdaptiveAvgPool2d((1, 1))
+        self.classifier = nn.Linear(self.backbone._out_channels[-1], num_classes)
         self.loss = nn.CrossEntropyLoss()
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.set_bn_eval = set_bn_eval
         self.acc = Accuracy(num_classes=num_classes)
-        #############################################################
+        ##
+        self.with_avg_batch = with_avg_batch
+        self.with_HOSVD_with_var_compression = with_HOSVD_with_var_compression
+        self.with_SVD_with_var_compression = with_SVD_with_var_compression
+        self.with_grad_filter = with_grad_filter
+        self.SVD_var = SVD_var
+        self.filt_radius = filt_radius
+        self.use_sgd = use_sgd
+        self.momentum = momentum
+        self.anneling_steps = anneling_steps
+        self.scheduler_interval = scheduler_interval
+        self.lr_warmup = lr_warmup
+        self.init_lr_prod = init_lr_prod
+        self.hook = {} # Hook being a dict: where key is the module name and value is the hook
         self.num_of_finetune = num_of_finetune
+        #############################################################
         filter_cfgs_ = get_all_conv_with_name(self) # Lấy 1 dict bao gồm tên và các lớp conv2d
         filter_cfgs = {}
+
         if num_of_finetune == "all":
             if with_SVD_with_var_compression or with_HOSVD_with_var_compression:
                 filter_cfgs = {"SVD_var": SVD_var}
-            elif with_SVD_compression:
-                filter_cfgs = {"truncated_SVD_k": truncated_SVD_k}
             elif with_grad_filter:
                 filter_cfgs = {"radius": filt_radius}
             filter_cfgs["cfgs"] = filter_cfgs_
@@ -50,8 +66,6 @@ class ClassificationModel(LightningModule):
             logging.info("[Warning] number of finetuned layers is bigger than the total number of conv layers in the network => Finetune all the network")
             if with_SVD_with_var_compression or with_HOSVD_with_var_compression:
                 filter_cfgs = {"SVD_var": SVD_var}
-            elif with_SVD_compression:
-                filter_cfgs = {"truncated_SVD_k": truncated_SVD_k}
             elif with_grad_filter:
                 filter_cfgs = {"radius": filt_radius}
             filter_cfgs["cfgs"] = filter_cfgs_
@@ -63,12 +77,10 @@ class ClassificationModel(LightningModule):
                     mod.eval()
                     for param in mod.parameters():
                         param.requires_grad = False # Freeze layer
-                elif name in filter_cfgs_.keys(): # Duyệt đến layer sẽ được finetune => break. Vì đằng sau các conv2d layer này còn có thể có các lớp fc, gì gì đó mà vẫn cần finetune
+                elif name in filter_cfgs_.keys(): # Khi duyệt đến layer sẽ được finetune => break. Vì đằng sau các conv2d layer này còn có thể có các lớp fc, gì gì đó mà vẫn cần finetune
                     break
             if with_SVD_with_var_compression or with_HOSVD_with_var_compression:
                 filter_cfgs = {"SVD_var": SVD_var}
-            elif with_SVD_compression:
-                filter_cfgs = {"truncated_SVD_k": truncated_SVD_k}
             elif with_grad_filter:
                 filter_cfgs = {"radius": filt_radius}
             filter_cfgs["cfgs"] = filter_cfgs_
@@ -86,27 +98,12 @@ class ClassificationModel(LightningModule):
         else:
             filter_cfgs = -1
         #######################################################################
-        self.with_avg_batch = with_avg_batch
-        self.with_HOSVD_with_var_compression = with_HOSVD_with_var_compression
-        self.with_SVD_with_var_compression = with_SVD_with_var_compression
-        self.with_SVD_compression = with_SVD_compression
-        self.with_grad_filter = with_grad_filter
-        self.use_sgd = use_sgd
-        self.momentum = momentum
-        self.anneling_steps = anneling_steps
-        self.scheduler_interval = scheduler_interval
-        self.lr_warmup = lr_warmup
-        self.init_lr_prod = init_lr_prod
-
-        self.SVD_var = SVD_var
-        self.truncated_SVD_k = truncated_SVD_k
-        self.filt_radius = filt_radius
-
-        self.hook = {} # Hook being a dict: where key is the module name and value is the hook
         
-        ############################################
 
-        
+        if len(load) != 0:
+            state_dict = th.load(load)['state_dict']
+            self.load_state_dict(state_dict)
+            
         # logging.info(f"Before registering filter: Weight size: {get_total_weight_size(self)}")
         if with_HOSVD_with_var_compression:
             register_HOSVD_with_var(self, filter_cfgs)
@@ -114,13 +111,11 @@ class ClassificationModel(LightningModule):
             register_conv_batch(self, filter_cfgs)
         elif with_SVD_with_var_compression:
             register_SVD_with_var(self, filter_cfgs)
-            # logging.info(f"After registering SVD compression: Weight size: {get_total_weight_size(self)}")
-        elif with_SVD_compression:
-            register_SVD(self, filter_cfgs)
-            # logging.info(f"After registering SVD compression: Weight size: {get_total_weight_size(self)}")
+            # logging.info(f"After registering SVD with var compression: Weight size: {get_total_weight_size(self)}")
         elif with_grad_filter:
             register_filter(self, filter_cfgs)
             # logging.info(f"After registering gradient filter: Weight size: {get_total_weight_size(self)}")
+
 
         self.acc.reset()
     def activate_hooks(self, is_activated=True):
@@ -148,7 +143,7 @@ class ClassificationModel(LightningModule):
         if isinstance(first_hook.module, Conv2dSVD_with_var) or isinstance(first_hook.module, Conv2dHOSVD_with_var):
             trainer.validate(self, datamodule=data)  
         elif isinstance(first_hook.module, Conv2dAvg) or isinstance(first_hook.module, Conv2d_Avg_Batch)\
-            or isinstance(first_hook.module, Conv2dSVD) or isinstance(first_hook.module, nn.modules.conv.Conv2d):
+            or isinstance(first_hook.module, nn.modules.conv.Conv2d):
             _ = th.rand(train_data_size[0], train_data_size[1], train_data_size[2], train_data_size[3])
             _ = self(_)
 
@@ -195,14 +190,6 @@ class ClassificationModel(LightningModule):
                     num_element_all += S.numel() + u0.numel() + u1.numel() + u2.numel() + u3.numel()
                     # print(name, ": ", input.shape, " ----- ", S.numel() + u0.numel() + u1.numel() + u2.numel() + u3.numel(), " --- ")
                 num_element += num_element_all/len(self.hook[name].inputs)
-
-            elif isinstance(self.hook[name].module, Conv2dSVD):
-                from custom_op.conv_svd import truncated_svd
-                temp_tensor = th.rand(input_size[0], input_size[1], input_size[2], input_size[3], dtype=th.float32)
-
-                Uk_Sk, Vk_t = truncated_svd(temp_tensor, k=self.truncated_SVD_k)
-                num_element += Uk_Sk.numel() + Vk_t.numel()
-                temp_tensor = None
             
             elif isinstance(self.hook[name].module, nn.modules.conv.Conv2d):
                 num_element += int(input_size[0] * input_size[1] * input_size[2] * input_size[3])

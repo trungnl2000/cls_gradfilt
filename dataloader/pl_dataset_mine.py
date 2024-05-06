@@ -38,7 +38,7 @@ class ClsDataset(LightningDataModule):
                 ):
         super(ClsDataset, self).__init__()
         self.name = name
-        self.data_dir = data_dir
+        self.data_dir = os.path.join(data_dir, "my_setup")
         self.train_split = train_split
         self.train_dataset = None
         self.val_dataset = None
