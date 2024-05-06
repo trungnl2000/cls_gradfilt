@@ -2,7 +2,7 @@ from math import ceil
 import torch.nn as nn
 import re
 from custom_op.conv_avg import Conv2dAvg
-from custom_op.conv_svd import Conv2dSVD
+from custom_op.conv_avg_batch import Conv2d_Avg_Batch
 from custom_op.conv_svd_with_var import Conv2dSVD_with_var
 from custom_op.conv_hosvd_with_var import Conv2dHOSVD_with_var
 import torch
@@ -37,7 +37,7 @@ def grad_logger(dst, name):
 def get_all_conv(model):
     conv_layers = []
     for name, mod in model.named_modules():
-        if isinstance(mod, nn.modules.conv.Conv2d) or isinstance(mod, Conv2dAvg) or isinstance(mod, Conv2dSVD): # Nếu mod là Conv2d hoặc Conv2dAvg hoặc Conv2dSVD
+        if isinstance(mod, nn.modules.conv.Conv2d) or isinstance(mod, Conv2dAvg) or isinstance(mod, Conv2d_Avg_Batch): # Nếu mod là Conv2d hoặc Conv2dAvg hoặc Conv2d_Avg_Batch
             conv_layers.append(mod)
     return conv_layers
 
@@ -55,7 +55,7 @@ def get_all_conv(model):
 #         active_conv_layers = []
 #         # active_conv_layers = {}
 #         for name, mod in model.named_modules():
-#             if isinstance(mod, nn.modules.conv.Conv2d) or isinstance(mod, Conv2dAvg)  or isinstance(mod, Conv2dSVD): # Nếu mod là Conv2d hoặc Conv2dAvg hoặc Conv2dSVD
+#             if isinstance(mod, nn.modules.conv.Conv2d) or isinstance(mod, Conv2dAvg)  or isinstance(mod, Conv2d_Avg_Batch): # Nếu mod là Conv2d hoặc Conv2dAvg hoặc Conv2d_Avg_Batch
 #                 if not any(re.match(f"^{prefix}(?:\\.|$)", name) for prefix in list_freeze_cfgs): # Module đang xét không thuộc danh sách freeze
 #                     active_conv_layers.append(mod)
 #                     # active_conv_layers[name] = mod
@@ -77,14 +77,14 @@ def get_total_weight_size(model, element_size=4): # element_size = 4 bytes
             weight_shape = conv_layer.weight.shape  # o, 1, k, k
             if isinstance(conv_layer, Conv2dAvg): # Nếu là conv2dAvg
                 this_num_weight += conv_layer.in_channels * 1 * 1
-            elif isinstance(conv_layer, Conv2dSVD):
+            elif isinstance(conv_layer, Conv2d_Avg_Batch):
                 this_num_weight += conv_layer.in_channels * weight_shape[2] * weight_shape[3] ############
             else: # normal conv2d
                 this_num_weight += conv_layer.in_channels * weight_shape[2] * weight_shape[3]
         elif isinstance(conv_layer, Conv2dAvg): # nếu là Conv2dAvg mà không phải depthwise
             weight_shape = conv_layer.weight.shape
             this_num_weight += weight_shape[0] * weight_shape[1] * 1 * 1 # Bỏ 2 dimension sau vì cái lớp này tính sum của ma trận weight
-        elif isinstance(conv_layer, Conv2dSVD): ################################
+        elif isinstance(conv_layer, Conv2d_Avg_Batch): ################################
             weight_shape = conv_layer.weight.shape
             if conv_layer.groups == 1:  # normal conv
                 this_num_weight += (weight_shape[0] * weight_shape[1] * weight_shape[2] * weight_shape[3])
@@ -106,7 +106,7 @@ def get_total_weight_size(model, element_size=4): # element_size = 4 bytes
 def get_all_conv_with_name(model):
     conv_layers = {}
     for name, mod in model.named_modules():
-        if isinstance(mod, nn.modules.conv.Conv2d) or isinstance(mod, Conv2dAvg) or isinstance(mod, Conv2dSVD) or isinstance(mod, Conv2dSVD_with_var) or isinstance(mod, Conv2dHOSVD_with_var):
+        if isinstance(mod, nn.modules.conv.Conv2d) or isinstance(mod, Conv2dAvg) or isinstance(mod, Conv2d_Avg_Batch) or isinstance(mod, Conv2dSVD_with_var) or isinstance(mod, Conv2dHOSVD_with_var):
             conv_layers[name] = mod
     return conv_layers
     
