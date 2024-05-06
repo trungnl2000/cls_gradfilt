@@ -52,7 +52,45 @@ class ClsDataset(LightningDataModule):
         self.num_classes = 0
 
     def setup(self, stage):
-        if self.name == 'cifar10':
+        if self.name == 'pets':
+            apply_transform = transforms.Compose(
+                [transforms.ToTensor(),
+                 transforms.Resize((self.width, self.height)),
+                 transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+            raw_train_dataset = datasets.ImageFolder(
+                os.path.join(self.data_dir, "train"), transform=apply_transform)
+            test_dataset = datasets.ImageFolder(
+                os.path.join(self.data_dir, "test"), transform=apply_transform)
+            
+            self.num_classes = 37
+
+        elif self.name == 'cub200':
+            apply_transform = transforms.Compose(
+                [transforms.ToTensor(),
+                 transforms.Resize((self.width, self.height)),
+                 transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+            raw_train_dataset = datasets.ImageFolder(
+                os.path.join(self.data_dir, "train"), transform=apply_transform)
+            test_dataset = datasets.ImageFolder(
+                os.path.join(self.data_dir, "test"), transform=apply_transform)
+            
+            self.num_classes = 200
+
+        elif self.name == 'flowers102':
+            apply_transform = transforms.Compose(
+                [transforms.ToTensor(),
+                 transforms.Resize((self.width, self.height)),
+                 transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+            train_dataset = datasets.ImageFolder(
+                os.path.join(self.data_dir, "train"), transform=apply_transform)
+            val_dataset = datasets.ImageFolder(
+                os.path.join(self.data_dir, "val"), transform=apply_transform)
+            test_dataset = datasets.ImageFolder(
+                os.path.join(self.data_dir, "test"), transform=apply_transform)
+            
+            self.num_classes = 102
+
+        elif self.name == 'cifar10':
             apply_transform = transforms.Compose(
                 [transforms.ToTensor(),
                 transforms.Resize((self.width, self.height)),
@@ -74,10 +112,16 @@ class ClsDataset(LightningDataModule):
             self.num_classes = 100
         else:
             raise NotImplementedError
-        idx_train, idx_val = split_and_shuffle(raw_train_dataset, self.train_split) # Lấy index của các phần tử trong tập train gốc để cho vào train và val
-        self.train_dataset = DatasetSplit(raw_train_dataset, idx_train) # Dựa vào index đã lấy, chia dữ liệu
-        self.val_dataset = DatasetSplit(raw_train_dataset, idx_val)
-        self.test_dataset = DatasetSplit(test_dataset, np.arange(len(test_dataset)))
+        if self.name != 'flowers102':
+            idx_train, idx_val = split_and_shuffle(raw_train_dataset, self.train_split) # Lấy index của các phần tử trong tập train gốc để cho vào train và val
+            self.train_dataset = DatasetSplit(raw_train_dataset, idx_train) # Dựa vào index đã lấy, chia dữ liệu
+            self.val_dataset = DatasetSplit(raw_train_dataset, idx_val)
+            self.test_dataset = DatasetSplit(test_dataset, np.arange(len(test_dataset)))
+        else:
+            self.train_dataset = DatasetSplit(train_dataset, np.arange(len(train_dataset)))
+            self.val_dataset = DatasetSplit(val_dataset, np.arange(len(val_dataset)))
+            self.test_dataset = DatasetSplit(test_dataset, np.arange(len(test_dataset)))
+
             
 
     def train_dataloader(self):

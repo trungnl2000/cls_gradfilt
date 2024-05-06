@@ -32,20 +32,25 @@ class CLI(LightningCLI):
         trainer = super(CLI, self).instantiate_trainer(**kwargs)
         return trainer
 
+from util import attach_hooks_for_conv
+
+
 def run():
     cli = CLI(ClassificationModel, ClsDataset, run=False, save_config_overwrite=True) # Dùng cli để load model và file config cho model
     model = cli.model # Khởi tạo model từ cli
     trainer = cli.trainer # Khởi tạo trainer từ cli
     data = cli.datamodule # Khởi tạo data từ cli
+    
     # logging.info(str(model))
+    
+    # attach_hooks_for_conv(model, True)
+    # model.activate_hooks(True)
+    # trainer.validate(model, datamodule=data)
 
-    train_data_size = torch.tensor([3, data.width, data.height]) # 3 kênh màu, data.width x data.height kích thước
-    logging.info(f"activation size: {model.get_activation_size(consider_active_only=True, unit='KB', train_data_size=train_data_size)}") # Dùng cho kiểu hook mới
-    # logging.info(f"FLOPs: {model.compute_Conv2d_flops(consider_active_only=True, unit='MB', train_data_size=train_data_size)}") # Dùng cho kiểu hook mới
+    logging.info(f"activation size: {model.get_activation_size(trainer, data, consider_active_only=True, unit='Byte')}") # Dùng cho kiểu hook mới
 
-    trainer.validate(model, datamodule=data)
-    trainer.fit(model, data)
-    trainer.validate(model, datamodule=data)
+    # trainer.fit(model, data)
+    # trainer.validate(model, datamodule=data)
 
 
 run()

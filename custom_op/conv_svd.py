@@ -3,27 +3,19 @@ from torch.autograd import Function
 from typing import Any
 from torch.nn.functional import conv2d
 import torch.nn as nn
-# from math import ceil
 
+###### SVD by choosing best k princliple components
 def truncated_svd(X, k):
     U, S, Vt = th.linalg.svd(X)
-    # Uk = U[:, :, :, :k]
-    # Sk = S[:, :, :k]
-    # Vk_t = Vt[:, :, :k, :]
-    # return U, S, Vt, Uk, Sk, Vk_t
     return th.matmul(U[:, :, :, :k], th.diag_embed(S[:, :, :k])) , Vt[:, :, :k, :]
 
-def calculate_tensor_memory(tensor):
-    total_memory = tensor.element_size() * tensor.numel()  # tổng bộ nhớ cần thiết
-    return total_memory
-
-def calculate_error(Sk, S):
-    Sk_ = th.reshape(Sk, (Sk.shape[0]*Sk.shape[1], Sk.shape[2]))
-    S_ = th.reshape(S, (S.shape[0]*S.shape[1], S.shape[2]))
-    error = 0
-    for i in range(len(Sk_)):
-        error += th.sum(Sk_[i]**2)/th.sum(S_[i]**2)
-    return error/i
+# def calculate_error(Sk, S):
+#     Sk_ = th.reshape(Sk, (Sk.shape[0]*Sk.shape[1], Sk.shape[2]))
+#     S_ = th.reshape(S, (S.shape[0]*S.shape[1], S.shape[2]))
+#     error = 0
+#     for i in range(len(Sk_)):
+#         error += th.sum(Sk_[i]**2)/th.sum(S_[i]**2)
+#     return error/i
 
 def restore_tensor(Uk_Sk, Vk_t):
     reconstructed_matrix = th.matmul(Uk_Sk, Vk_t)
@@ -35,9 +27,8 @@ class Conv2dSVDop(Function):
     def forward(ctx: Any, *args: Any, **kwargs: Any) -> Any:
         input, weight, bias, stride, dilation, padding, groups, k = args
 
-        output = conv2d(input, weight, bias, stride, padding, dilation=dilation, groups=groups) # Chỗ này như bình thường
+        output = conv2d(input, weight, bias, stride, padding, dilation=dilation, groups=groups)
 
-        # Phân rã svd ở đây
         input_Uk_Sk, input_Vk_t = truncated_svd(input, k=k)
         ctx.save_for_backward(input_Uk_Sk, input_Vk_t, weight, bias)
 
@@ -50,7 +41,6 @@ class Conv2dSVDop(Function):
 
     @staticmethod
     def backward(ctx: Any, *grad_outputs: Any) -> Any:
-        # input, weight, bias = ctx.saved_tensors
 
         input_Uk_Sk, input_Vk_t, weight, bias = ctx.saved_tensors
         input = restore_tensor(input_Uk_Sk, input_Vk_t)
@@ -69,7 +59,7 @@ class Conv2dSVDop(Function):
             grad_weight = nn.grad.conv2d_weight(input, weight.shape, grad_output, stride, padding, dilation, groups)
         if bias is not None and ctx.needs_input_grad[2]:
             grad_bias = grad_output.sum((0,2,3)).squeeze(0)
-        return grad_input, grad_weight, grad_bias, None, None, None, None
+        return grad_input, grad_weight, grad_bias, None, None, None, None, None
 
 class Conv2dSVD(nn.Conv2d):
     def __init__(

@@ -8,6 +8,8 @@ from .mobilenet import mobilenet_encoders
 from .mcunet import mcunet_encoders
 
 from ._preprocessing import preprocess_input
+import os
+from .prepare_ckpt import save_full_ckpt
 
 encoders = {}
 encoders.update(resnet_encoders)
@@ -41,9 +43,21 @@ def get_encoder(name, in_channels=3, depth=5, weights=None, output_stride=32, **
         encoder.load_state_dict(model_zoo.load_url(settings["url"]))    
         
     if weights == "full_imagenet":
+        saved_location = "./pretrained_ckpts/"
         if name == "resnet18":
+            checkpoint = "pre_trained_resnet18_raw.ckpt"
+            if not os.path.exists(os.path.join(saved_location, checkpoint)):
+                save_full_ckpt("pre_trained_resnet18", saved_location, False)
             model_state_dict = torch.load("pretrained_ckpts/pre_trained_resnet18_raw.ckpt")['state_dict']
+        elif name == "resnet34":
+            checkpoint = "pre_trained_resnet34_raw.ckpt"
+            if not os.path.exists(os.path.join(saved_location, checkpoint)):
+                save_full_ckpt("pre_trained_resnet34", saved_location, False)
+            model_state_dict = torch.load("pretrained_ckpts/pre_trained_resnet34_raw.ckpt")['state_dict']
         elif name == "mobilenet_v2":
+            checkpoint = "pre_trained_mbv2_raw.ckpt"
+            if not os.path.exists(os.path.join(saved_location, checkpoint)):
+                save_full_ckpt("pre_trained_mbv2", saved_location, False)
             model_state_dict = torch.load("pretrained_ckpts/pre_trained_mbv2_raw.ckpt")['state_dict']
         # elif name == "mcunet":  (Triển khai sau) (Không cần triển khai nữa vì họ đã tự load)
         encoder.load_state_dict(model_state_dict)
