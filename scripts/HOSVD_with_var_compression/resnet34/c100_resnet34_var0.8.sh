@@ -1,11 +1,11 @@
 pwd
 date
 
-dataset="cifar10"
-num_classes="10"
+dataset="cifar100"
+num_classes="100"
 
-usr_group_kl=15.29
-load_args="--model.load pretrained_ckpts/res34/pretrain_15.29_cifar10/version_0/checkpoints/epoch=13-val-acc=0.976.ckpt"
+usr_group_kl=15.82
+load_args="--model.load pretrained_ckpts/res34/pretrain_15.82_cifar100/version_0/checkpoints/epoch=08-val-acc=0.835.ckpt"
 
 general_config_args="--config configs/resnet34_config.yaml"
 logger_args="--logger.save_dir runs/resnet34/$dataset/HOSVD/var0.8"
