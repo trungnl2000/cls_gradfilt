@@ -17,8 +17,8 @@ from functools import reduce
 import logging
 
 class ClassificationModel(LightningModule):
-    def __init__(self, backbone: str, backbone_args, num_classes, load,
-                 learning_rate, weight_decay, set_bn_eval,
+    def __init__(self, backbone: str, backbone_args, num_classes,
+                 learning_rate, weight_decay, set_bn_eval, load = None,
 
                  num_of_finetune=None, 
                  with_avg_batch=False, with_HOSVD_with_var_compression = False, with_SVD_with_var_compression=False, with_grad_filter=False,
@@ -27,10 +27,15 @@ class ClassificationModel(LightningModule):
                  use_sgd=False, momentum=0.9, anneling_steps=8008, scheduler_interval='step',
                  lr_warmup=0, init_lr_prod=0.25):
         super(ClassificationModel, self).__init__()
-    
+        self.backbone_name = backbone
         self.backbone = get_encoder(backbone, **backbone_args) # Nếu weights (trong backbone_args) được định nghĩa (ssl hoặc sswl) thì load weight từ online về (trong models/encoders/resnet.py hoặc mcunet.py hoặc mobilenet.py)        
-        self.pooling = nn.AdaptiveAvgPool2d((1, 1))
-        self.classifier = nn.Linear(self.backbone._out_channels[-1], num_classes)
+        if backbone != "swinT":
+            self.pooling = nn.AdaptiveAvgPool2d((1, 1))
+            self.classifier = nn.Linear(self.backbone._out_channels[-1], num_classes)
+        else:
+            self.backbone.head = nn.Linear(in_features=768, out_features=num_classes, bias=True) # Thay lớp cuối của swinT
+            # self.classifier = nn.Linear(in_features=768, out_features=num_classes, bias=True) # Thay lớp cuối của swinT
+            
         self.loss = nn.CrossEntropyLoss()
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
@@ -100,7 +105,7 @@ class ClassificationModel(LightningModule):
         #######################################################################
         
 
-        if len(load) != 0:
+        if load != None:
             state_dict = th.load(load)['state_dict']
             self.load_state_dict(state_dict)
             
@@ -334,11 +339,16 @@ class ClassificationModel(LightningModule):
         self.apply(f)
 
     def forward(self, x):
-        feat = self.backbone(x)[-1]
-        feat = self.pooling(feat)
-        feat = feat.flatten(start_dim=1)
-        logit = self.classifier(feat)
-        return logit
+        if self.backbone_name != "swinT":
+            feat = self.backbone(x)[-1]
+            feat = self.pooling(feat)
+            feat = feat.flatten(start_dim=1)
+            logit = self.classifier(feat)
+            return logit
+        else:
+            logit = self.backbone(x)
+            # logit = self.classifier(feat)
+            return logit
 
     def training_step(self, train_batch, batch_idx):
         if self.set_bn_eval:

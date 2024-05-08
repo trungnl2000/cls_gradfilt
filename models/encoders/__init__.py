@@ -10,6 +10,7 @@ from .mcunet import mcunet_encoders
 from ._preprocessing import preprocess_input
 import os
 from .prepare_ckpt import save_full_ckpt
+from torchvision.models import swin_t
 
 encoders = {}
 encoders.update(resnet_encoders)
@@ -18,7 +19,8 @@ encoders.update(mcunet_encoders)
 
 
 def get_encoder(name, in_channels=3, depth=5, weights=None, output_stride=32, **kwargs): # pretrained là thuộc tính chỉ của mcunet (nó có thể thuộc kwargs)
-
+    if name == "swinT":
+        return swin_t()
     try:
         Encoder = encoders[name]["encoder"]
     except KeyError:

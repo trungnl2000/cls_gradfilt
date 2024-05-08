@@ -6,10 +6,12 @@ from torchvision.models import (
     resnet18,
     resnet50,
     mobilenet_v2,
+    swin_t,
     ResNet18_Weights,
     ResNet50_Weights,
     MobileNet_V2_Weights,
-    ResNet34_Weights
+    ResNet34_Weights,
+    Swin_T_Weights
 )
 
 from pytorch_lightning import LightningModule
@@ -28,6 +30,8 @@ class ClassificationModel(LightningModule):
             self.backbone = resnet50(weights=ResNet50_Weights.DEFAULT)
         elif backbone == "mbv2":
             self.backbone = mobilenet_v2(weights=MobileNet_V2_Weights.DEFAULT)
+        elif backbone == "swinT":
+            self.backbone = swin_t(weights=Swin_T_Weights.DEFAULT)
         else:
             raise ValueError(f"No such model {backbone}")
 
@@ -45,6 +49,8 @@ def save_full_ckpt(net_name, saved_location, turn_to_backbone=True):
             model = ClassificationModel(backbone='resnet50')
         elif net_name == "pre_trained_mbv2":
             model = ClassificationModel(backbone='mbv2')
+        elif net_name == "pre_trained_swinT":
+            model = ClassificationModel(backbone='swinT')
         else:
             raise ValueError(f"No such model {net_name}")
     else:
@@ -57,6 +63,8 @@ def save_full_ckpt(net_name, saved_location, turn_to_backbone=True):
             model = resnet50(weights=ResNet50_Weights.DEFAULT)
         elif net_name == "pre_trained_mbv2":
             model = mobilenet_v2(weights=MobileNet_V2_Weights.DEFAULT)
+        elif net_name == "pre_trained_swinT":
+            model = swin_t(weights=Swin_T_Weights.DEFAULT)
         elif net_name == "resnet18":
             model = resnet18()
         elif net_name == "resnet34":
@@ -65,6 +73,8 @@ def save_full_ckpt(net_name, saved_location, turn_to_backbone=True):
             model = resnet50()
         elif net_name == "mbv2":
             model = mobilenet_v2()
+        elif net_name == "swinT":
+            model = swin_t()
         else:
             raise ValueError(f"No such model {net_name}")
 
@@ -87,7 +97,7 @@ saved_location = "./pretrained_ckpts/"
 # for name in names:
     # save_full_ckpt(name, saved_location, False)
 
-save_full_ckpt("pre_trained_resnet34", saved_location, False)
+# save_full_ckpt("swinT", saved_location, False)
 
 
 
@@ -103,12 +113,12 @@ save_full_ckpt("pre_trained_resnet34", saved_location, False)
 #     # model = get_encoder(backbone, **backbone_args) # Nếu weights (trong backbone_args) được định nghĩa (ssl hoặc sswl) thì load weight từ online về (trong models/encoders/resnet.py hoặc mcunet.py hoặc mobilenet.py)
 #     model_state_dict = torch.load(saved_location)#['state_dict']
 #     # model.load_state_dict(model_state_dict)
-#     print(model_state_dict.keys())
+#     print(model_state_dict['state_dict'])
 #     # print(model.backbone)
 #     # print(model.keys())
 
 # # load_model("pre_trained_resnet18",saved_location)
-# load_model("pre_trained_resnet18","/home/infres/lnguyen-23/test/classification/delete/semi_supervised_resnet18-d92f0530.pth")
+# load_model("swinT","/home/infres/lnguyen-23/test/classification/pretrained_ckpts/swinT_raw.ckpt")
 
 
 
