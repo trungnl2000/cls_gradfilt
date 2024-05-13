@@ -63,6 +63,24 @@ def get_encoder(name, in_channels=3, depth=5, weights=None, output_stride=32, **
             model_state_dict = torch.load("pretrained_ckpts/pre_trained_mbv2_raw.ckpt")['state_dict']
         # elif name == "mcunet":  (Triển khai sau) (Không cần triển khai nữa vì họ đã tự load)
         encoder.load_state_dict(model_state_dict)
+    elif weights == "raw":
+        saved_location = "./pretrained_ckpts/"
+        if name == "resnet18":
+            checkpoint = "resnet18_raw.ckpt"
+            if not os.path.exists(os.path.join(saved_location, checkpoint)):
+                save_full_ckpt("resnet18", saved_location, False)
+            model_state_dict = torch.load("pretrained_ckpts/resnet18_raw.ckpt")['state_dict']
+        elif name == "resnet34":
+            checkpoint = "resnet34_raw.ckpt"
+            if not os.path.exists(os.path.join(saved_location, checkpoint)):
+                save_full_ckpt("resnet34", saved_location, False)
+            model_state_dict = torch.load("pretrained_ckpts/resnet34_raw.ckpt")['state_dict']
+        elif name == "mobilenet_v2":
+            checkpoint = "mbv2_raw.ckpt"
+            if not os.path.exists(os.path.join(saved_location, checkpoint)):
+                save_full_ckpt("mbv2", saved_location, False)
+            model_state_dict = torch.load("pretrained_ckpts/mbv2_raw.ckpt")['state_dict']
+        encoder.load_state_dict(model_state_dict)
         
     if "mcunet" in name:
         assert "pretrained" in kwargs, "[Warning] pretrained condition is not defined for mcunet"

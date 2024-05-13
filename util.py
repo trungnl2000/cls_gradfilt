@@ -5,6 +5,7 @@ from custom_op.conv_avg import Conv2dAvg
 from custom_op.conv_avg_batch import Conv2d_Avg_Batch
 from custom_op.conv_svd_with_var import Conv2dSVD_with_var
 from custom_op.conv_hosvd_with_var import Conv2dHOSVD_with_var
+from custom_op_linear.linear_hosvd_with_var import Linear_HOSVD
 import torch
 
 ###################################### Their functions ##############################
@@ -103,6 +104,23 @@ def get_total_weight_size(model, element_size=4): # element_size = 4 bytes
 
 ########## Phiên bản hook khác ##########
 
+def get_all_linear_with_name(model):
+    linear_layers = {}
+    for name, mod in model.named_modules():
+        if isinstance(mod, nn.modules.linear.Linear) or isinstance(mod, Linear_HOSVD):
+            linear_layers[name] = mod
+    return linear_layers
+
+def get_active_linear_with_name(model):
+    total_linear_layer = get_all_linear_with_name(model)
+    if model.num_of_finetune == "all" or model.num_of_finetune > len(total_linear_layer):
+        return total_linear_layer
+    elif model.num_of_finetune == None or model.num_of_finetune == 0:
+        return -1 # Không có conv layer nào được finetuned
+    else:
+        active_linear_layers = dict(list(total_linear_layer.items())[-model.num_of_finetune:]) # Chỉ áp dụng filter vào num_of_finetune conv2d layer cuối
+        return active_linear_layers
+
 def get_all_conv_with_name(model):
     conv_layers = {}
     for name, mod in model.named_modules():
@@ -159,4 +177,21 @@ def attach_hooks_for_conv(model, consider_active_only=False):
     assert conv_layers != -1, "[Warning] Consider activate conv2d only but no conv2d is finetuned => No hook is attached !!"
 
     for name, mod in  conv_layers.items():
+        model.hook[name] = Hook(mod) # attribute hook trong model là dict
+
+def attach_hooks_for_linear(model, consider_active_only=False):
+    '''
+    model: Mô hình
+    consider_active_only: True - Chỉ consider các lớp active khi finetune | False - Consider tất
+    model.freeze_cfgs: cấu hình xem các lớp nào bị freeze, được định nghĩa trong folder trung_configs
+
+    => Hàm này đăng kí hook cho model để lưu lại input/output size tại mỗi lớp convolution
+    '''
+    if not consider_active_only:
+        linear_layers = get_all_linear_with_name(model)
+    else:
+        linear_layers = get_active_linear_with_name(model)
+    assert linear_layers != -1, "[Warning] Consider activate conv2d only but no conv2d is finetuned => No hook is attached !!"
+
+    for name, mod in  linear_layers.items():
         model.hook[name] = Hook(mod) # attribute hook trong model là dict

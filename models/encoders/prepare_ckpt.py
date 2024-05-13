@@ -31,7 +31,7 @@ class ClassificationModel(LightningModule):
             raise ValueError(f"No such model {backbone}")
 
 # Hàm để lưu chúng
-def save_full_ckpt(net_name, saved_location, turn_to_backbone=True):
+def save_full_ckpt(net_name, saved_location, turn_to_backbone=False):
     if os.path.exists(saved_location) == False:
         os.mkdir(saved_location)
     if turn_to_backbone:

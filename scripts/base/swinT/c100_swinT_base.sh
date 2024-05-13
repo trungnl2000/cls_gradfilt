@@ -1,11 +1,11 @@
 pwd
 date
 
-dataset="cifar10"
-num_classes="10"
+dataset="cifar100"
+num_classes="100"
 
-usr_group_kl=15.29
-load_args="--model.load pretrained_ckpts/swinT/c10_epoch=24-val-acc=0.809.ckpt"
+usr_group_kl=15.82
+load_args="--model.load pretrained_ckpts/swinT/c100_epoch=44-val-acc=0.489.ckpt"
 
 general_config_args="--config configs/swinT_config.yaml"
 logger_args="--logger.save_dir runs/swinT/$dataset/base"
@@ -18,5 +18,5 @@ common_args="$general_config_args $trainer_args $data_args $model_args $load_arg
 
 echo $common_args
 
-# python trainer_cls_linear.py ${common_args} --logger.exp_name base_l2_${usr_group_kl} --model.num_of_finetune 2 #4841472
-python pretrain_cls_count_mem.py ${common_args} --logger.exp_name base_l4_${usr_group_kl} --model.num_of_finetune 4
+python trainer_cls_linear.py ${common_args} --logger.exp_name base_l2_${usr_group_kl} --model.num_of_finetune 2
+python trainer_cls_linear.py ${common_args} --logger.exp_name base_l4_${usr_group_kl} --model.num_of_finetune 4

@@ -30,7 +30,6 @@ model:
   weight_decay: 1e-4
   set_bn_eval: True
   num_of_finetune: 1
-  filt_radius: 2
 data:
   data_dir: "./data/cifar10"
   name: "cifar10"

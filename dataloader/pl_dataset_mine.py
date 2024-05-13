@@ -30,12 +30,18 @@ class DatasetSplit(Dataset):
 
 
 class ClsDataset(LightningDataModule):
+    # def __init__(self, data_dir, name='mnist',
+    #              train_split=0.8,
+    #              batch_size=32, train_shuffle=True,
+    #              width=224, height=224,
+    #              train_workers=4, val_workers=1
+    #             ):
     def __init__(self, data_dir, name='mnist',
-                 train_split=0.8,
-                 batch_size=32, train_shuffle=True,
-                 width=224, height=224,
-                 train_workers=4, val_workers=1
-                ):
+                    num_partitions=2, iid=False, train_split=0.8,
+                    batch_size=32, train_shuffle=True,
+                    width=224, height=224,
+                    train_workers=4, val_workers=1,
+                    usr_group=None, partition=0, shards_per_partition=2):
         super(ClsDataset, self).__init__()
         self.name = name
         self.data_dir = os.path.join(data_dir, "my_setup")
