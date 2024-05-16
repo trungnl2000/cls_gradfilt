@@ -8,9 +8,9 @@ usr_group_kl="full_pretrain_imagenet"
 
 general_config_args="--config configs/resnet18_config.yaml"
 logger_args="--logger.save_dir runs/resnet18/$dataset/HOSVD/var0.8"
-data_args="--data.name $dataset --data.data_dir data/$dataset --data.train_workers 24 --data.val_workers 24 --data.partition 1 --data.usr_group data/$dataset/usr_group_${usr_group_kl}.npy"
+data_args="--data.name $dataset --data.data_dir data/$dataset --data.train_workers 24 --data.val_workers 24"
 trainer_args="--trainer.max_epochs 50"
-model_args="--model.SVD_var 0.8 --model.with_HOSVD_with_var_compression True --model.set_bn_eval True --model.use_sgd True --model.learning_rate 0.005 --model.num_classes $num_classes --model.momentum 0 --model.anneling_steps 50 --model.scheduler_interval epoch --trainer.gradient_clip_val 2.0"
+model_args="--model.SVD_var 0.8 --model.with_HOSVD_with_var_compression True --model.set_bn_eval True --model.use_sgd True --model.learning_rate 0.05 --model.num_classes $num_classes --model.momentum 0 --model.anneling_steps 50 --model.scheduler_interval epoch --trainer.gradient_clip_val 2.0"
 seed_args="--seed_everything 233"
 
 common_args="$general_config_args $trainer_args $data_args $model_args $load_args $logger_args $seed_args"

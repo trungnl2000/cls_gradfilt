@@ -44,7 +44,7 @@ class ClsDataset(LightningDataModule):
                     usr_group=None, partition=0, shards_per_partition=2):
         super(ClsDataset, self).__init__()
         self.name = name
-        self.data_dir = os.path.join(data_dir, "my_setup")
+        self.data_dir = data_dir
         self.train_split = train_split
         self.train_dataset = None
         self.val_dataset = None

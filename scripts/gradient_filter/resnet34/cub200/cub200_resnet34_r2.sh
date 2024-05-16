@@ -1,22 +1,23 @@
 pwd
 date
 
-dataset="flowers102"
-num_classes="102"
+dataset="cub200"
+num_classes="200"
 
-general_config_args="--config configs/mbv2_config.yaml"
 usr_group_kl="full_pretrain_imagenet"
-logger_args="--logger.save_dir runs/mbv2/$dataset/gradfilt/r2"
+
+general_config_args="--config configs/resnet34_config.yaml"
+logger_args="--logger.save_dir runs/resnet34/$dataset/gradfilt/r2"
 data_args="--data.name $dataset --data.data_dir data/$dataset --data.train_workers 24 --data.val_workers 24"
 trainer_args="--trainer.max_epochs 50"
-model_args="--model.filt_radius 2 --model.with_grad_filter True --model.set_bn_eval True --model.use_sgd True --model.learning_rate 0.05 --model.num_classes $num_classes --model.momentum 0 --model.anneling_steps 50 --model.scheduler_interval epoch --trainer.gradient_clip_val 2.0"
+model_args="--model.with_grad_filter True --model.filt_radius 2 --model.set_bn_eval True --model.use_sgd True --model.learning_rate 0.05 --model.num_classes $num_classes --model.momentum 0 --model.anneling_steps 50 --model.scheduler_interval epoch --trainer.gradient_clip_val 2.0"
 seed_args="--seed_everything 233"
 
-common_args="$general_config_args $trainer_args $data_args $model_args $logger_args $seed_args"
+common_args="$general_config_args $trainer_args $data_args $model_args $load_args $logger_args $seed_args"
 
 echo $common_args
 
-# R2
+# R2 Có 20 lớp conv2d
 python trainer_cls.py ${common_args} --logger.exp_name filt_l1_r2_${usr_group_kl} --model.num_of_finetune 1
 python trainer_cls.py ${common_args} --logger.exp_name filt_l2_r2_${usr_group_kl} --model.num_of_finetune 2
 python trainer_cls.py ${common_args} --logger.exp_name filt_l3_r2_${usr_group_kl} --model.num_of_finetune 3
@@ -53,19 +54,3 @@ python trainer_cls.py ${common_args} --logger.exp_name filt_l10_r2_${usr_group_k
 # python trainer_cls.py ${common_args} --logger.exp_name filt_l34_r2_${usr_group_kl} --model.num_of_finetune 34
 # python trainer_cls.py ${common_args} --logger.exp_name filt_l35_r2_${usr_group_kl} --model.num_of_finetune 35
 # python trainer_cls.py ${common_args} --logger.exp_name filt_l36_r2_${usr_group_kl} --model.num_of_finetune 36
-# python trainer_cls.py ${common_args} --logger.exp_name filt_l37_r2_${usr_group_kl} --model.num_of_finetune 37
-# python trainer_cls.py ${common_args} --logger.exp_name filt_l38_r2_${usr_group_kl} --model.num_of_finetune 38
-# python trainer_cls.py ${common_args} --logger.exp_name filt_l39_r2_${usr_group_kl} --model.num_of_finetune 39
-# python trainer_cls.py ${common_args} --logger.exp_name filt_l40_r2_${usr_group_kl} --model.num_of_finetune 40
-# python trainer_cls.py ${common_args} --logger.exp_name filt_l41_r2_${usr_group_kl} --model.num_of_finetune 41
-# python trainer_cls.py ${common_args} --logger.exp_name filt_l42_r2_${usr_group_kl} --model.num_of_finetune 42
-# python trainer_cls.py ${common_args} --logger.exp_name filt_l43_r2_${usr_group_kl} --model.num_of_finetune 43
-# python trainer_cls.py ${common_args} --logger.exp_name filt_l44_r2_${usr_group_kl} --model.num_of_finetune 44
-# python trainer_cls.py ${common_args} --logger.exp_name filt_l45_r2_${usr_group_kl} --model.num_of_finetune 45
-# python trainer_cls.py ${common_args} --logger.exp_name filt_l46_r2_${usr_group_kl} --model.num_of_finetune 46
-# python trainer_cls.py ${common_args} --logger.exp_name filt_l47_r2_${usr_group_kl} --model.num_of_finetune 47
-# python trainer_cls.py ${common_args} --logger.exp_name filt_l48_r2_${usr_group_kl} --model.num_of_finetune 48
-# python trainer_cls.py ${common_args} --logger.exp_name filt_l49_r2_${usr_group_kl} --model.num_of_finetune 49
-# python trainer_cls.py ${common_args} --logger.exp_name filt_l50_r2_${usr_group_kl} --model.num_of_finetune 50
-# python trainer_cls.py ${common_args} --logger.exp_name filt_l51_r2_${usr_group_kl} --model.num_of_finetune 51
-# python trainer_cls.py ${common_args} --logger.exp_name filt_l52_r2_${usr_group_kl} --model.num_of_finetune 52
