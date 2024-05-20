@@ -16,16 +16,16 @@ common_args="$general_config_args $trainer_args $data_args $model_args $logger_a
 
 echo $common_args
 
-python trainer_cls.py ${common_args} --logger.exp_name SVD_l1_var0.8_${usr_group_kl} --model.num_of_finetune 1 
+# python trainer_cls.py ${common_args} --logger.exp_name SVD_l1_var0.8_${usr_group_kl} --model.num_of_finetune 1 
 python trainer_cls.py ${common_args} --logger.exp_name SVD_l2_var0.8_${usr_group_kl} --model.num_of_finetune 2
-python trainer_cls.py ${common_args} --logger.exp_name SVD_l3_var0.8_${usr_group_kl} --model.num_of_finetune 3
+# python trainer_cls.py ${common_args} --logger.exp_name SVD_l3_var0.8_${usr_group_kl} --model.num_of_finetune 3
 python trainer_cls.py ${common_args} --logger.exp_name SVD_l4_var0.8_${usr_group_kl} --model.num_of_finetune 4
-python trainer_cls.py ${common_args} --logger.exp_name SVD_l5_var0.8_${usr_group_kl} --model.num_of_finetune 5
-python trainer_cls.py ${common_args} --logger.exp_name SVD_l6_var0.8_${usr_group_kl} --model.num_of_finetune 6
-python trainer_cls.py ${common_args} --logger.exp_name SVD_l7_var0.8_${usr_group_kl} --model.num_of_finetune 7
-python trainer_cls.py ${common_args} --logger.exp_name SVD_l8_var0.8_${usr_group_kl} --model.num_of_finetune 8
-python trainer_cls.py ${common_args} --logger.exp_name SVD_l9_var0.8_${usr_group_kl} --model.num_of_finetune 9
-python trainer_cls.py ${common_args} --logger.exp_name SVD_l10_var0.8_${usr_group_kl} --model.num_of_finetune 10
+# python trainer_cls.py ${common_args} --logger.exp_name SVD_l5_var0.8_${usr_group_kl} --model.num_of_finetune 5
+# python trainer_cls.py ${common_args} --logger.exp_name SVD_l6_var0.8_${usr_group_kl} --model.num_of_finetune 6
+# python trainer_cls.py ${common_args} --logger.exp_name SVD_l7_var0.8_${usr_group_kl} --model.num_of_finetune 7
+# python trainer_cls.py ${common_args} --logger.exp_name SVD_l8_var0.8_${usr_group_kl} --model.num_of_finetune 8
+# python trainer_cls.py ${common_args} --logger.exp_name SVD_l9_var0.8_${usr_group_kl} --model.num_of_finetune 9
+# python trainer_cls.py ${common_args} --logger.exp_name SVD_l10_var0.8_${usr_group_kl} --model.num_of_finetune 10
 # python trainer_cls.py ${common_args} --logger.exp_name SVD_l11_var0.8_${usr_group_kl} --model.num_of_finetune 11
 # python trainer_cls.py ${common_args} --logger.exp_name SVD_l12_var0.8_${usr_group_kl} --model.num_of_finetune 12
 # python trainer_cls.py ${common_args} --logger.exp_name SVD_l13_var0.8_${usr_group_kl} --model.num_of_finetune 13

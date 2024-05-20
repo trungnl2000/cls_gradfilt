@@ -5,9 +5,9 @@ import torch as th
 import torch.nn as nn
 from pytorch_lightning import LightningModule
 from torchmetrics import Accuracy
-from custom_op_linear.register import register_HOSVD_with_var, register_avg_batch
-from custom_op_linear.conv_avg_batch import Conv2d_Avg_Batch
+from custom_op_linear.register import register_HOSVD_with_var, register_avg_batch, register_SVD_with_var
 from custom_op_linear.linear_hosvd_with_var import Linear_HOSVD
+from custom_op_linear.linear_svd_with_var import Linear_SVD
 from custom_op_linear.linear_avg_batch import Linear_avg_batch
 from util import freeze_layers, get_total_weight_size, get_all_linear_with_name, attach_hooks_for_linear
 from math import ceil
@@ -20,7 +20,7 @@ class ClassificationModel(LightningModule):
                  learning_rate, weight_decay, set_bn_eval, load = None,
 
                  num_of_finetune=None, 
-                 with_avg_batch=False, with_HOSVD_with_var_compression = False,
+                 with_avg_batch=False, with_HOSVD_with_var_compression = False, with_SVD_with_var_compression = False,
                  SVD_var=None,
                  
                  use_sgd=False, momentum=0.9, anneling_steps=8008, scheduler_interval='step',
@@ -38,6 +38,7 @@ class ClassificationModel(LightningModule):
         ##
         self.with_avg_batch = with_avg_batch
         self.with_HOSVD_with_var_compression = with_HOSVD_with_var_compression
+        self.with_SVD_with_var_compression = with_SVD_with_var_compression
         self.SVD_var = SVD_var
         self.use_sgd = use_sgd
         self.momentum = momentum
@@ -52,13 +53,13 @@ class ClassificationModel(LightningModule):
         filter_cfgs = {}
 
         if num_of_finetune == "all":
-            if with_HOSVD_with_var_compression:
+            if with_HOSVD_with_var_compression or with_SVD_with_var_compression:
                 filter_cfgs = {"SVD_var": SVD_var}
 
             filter_cfgs["cfgs"] = filter_cfgs_
         elif num_of_finetune > len(filter_cfgs_): # Nếu finetune toàn bộ
             logging.info("[Warning] number of finetuned layers is bigger than the total number of linear layers in the network => Finetune all the network")
-            if with_HOSVD_with_var_compression:
+            if with_HOSVD_with_var_compression or with_SVD_with_var_compression:
                 filter_cfgs = {"SVD_var": SVD_var}
 
             filter_cfgs["cfgs"] = filter_cfgs_
@@ -71,7 +72,7 @@ class ClassificationModel(LightningModule):
                         param.requires_grad = False # Freeze layer
                 elif name in filter_cfgs_.keys(): # Khi duyệt đến layer sẽ được finetune => break. Vì đằng sau các linear layer này còn có thể có các lớp fc, gì gì đó mà vẫn cần finetune
                     break
-            if with_HOSVD_with_var_compression:
+            if with_HOSVD_with_var_compression or with_SVD_with_var_compression:
                 filter_cfgs = {"SVD_var": SVD_var}
 
             filter_cfgs["cfgs"] = filter_cfgs_
@@ -97,6 +98,8 @@ class ClassificationModel(LightningModule):
         # logging.info(f"Before registering filter: Weight size: {get_total_weight_size(self)}")
         if with_HOSVD_with_var_compression:
             register_HOSVD_with_var(self, filter_cfgs)
+        elif with_SVD_with_var_compression:
+            register_SVD_with_var(self, filter_cfgs)
         elif with_avg_batch:
             register_avg_batch(self, filter_cfgs)
 
@@ -127,7 +130,7 @@ class ClassificationModel(LightningModule):
         # Create a temporary input for model so the hook can record input/output size
         # trainer.validate(self, datamodule=data)  
 
-        if isinstance(first_hook.module, Linear_HOSVD):
+        if isinstance(first_hook.module, Linear_HOSVD) or isinstance(first_hook.module, Linear_SVD):
             trainer.validate(self, datamodule=data)  
         elif isinstance(first_hook.module, nn.modules.linear.Linear):
             _ = th.rand(train_data_size[0], train_data_size[1], train_data_size[2], train_data_size[3])
@@ -153,11 +156,15 @@ class ClassificationModel(LightningModule):
 
                 # print(name, ": ", self.hook[name].module, " ----- ",int(input_size[0] * input_size[1] * x_sum_height * x_sum_width))
 
-            if isinstance(self.hook[name].module, Conv2d_Avg_Batch):
-                temp_tensor = th.rand(input_size[0], input_size[1], input_size[2], input_size[3], dtype=th.float32)  
-                from custom_op.conv_avg_batch import conv_avg_batch
-                x = conv_avg_batch(temp_tensor)
-                num_element += x.numel() + th.tensor(temp_tensor.shape).numel()
+            if isinstance(self.hook[name].module, Linear_SVD):
+                ############## Kiểu reshape activation map theo dim
+                from custom_op_linear.linear_svd_with_var import truncated_svd
+                num_element_all = 0
+                for input in self.hook[name].inputs:
+                    input_Uk_Sk, input_Vk_t = truncated_svd(input, var=self.SVD_var)
+                    num_element_all += input_Uk_Sk.numel() + input_Vk_t.numel()
+                if len(self.hook[name].inputs) != 0:
+                    num_element += num_element_all/len(self.hook[name].inputs)
 
             
             elif isinstance(self.hook[name].module, Linear_HOSVD):

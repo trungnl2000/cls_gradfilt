@@ -224,6 +224,8 @@ class ClassificationModel(LightningModule):
         #     sheet.cell(row=next_row, column=1, value=content)
         #     workbook.save(filename)
         def write_to_txt(filename, content):
+            if not os.path.exists("mem_res/"):
+                os.makedirs("mem_res/")
             filename = "mem_res/" + filename + ".txt"
             try:
                 with open(filename, 'a') as file:

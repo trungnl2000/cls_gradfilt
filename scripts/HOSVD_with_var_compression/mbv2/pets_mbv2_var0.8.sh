@@ -21,14 +21,9 @@ python trainer_cls.py ${common_args} --logger.exp_name HOSVD_l1_var0.8_${usr_gro
 python trainer_cls.py ${common_args} --logger.exp_name HOSVD_l2_var0.8_${usr_group_kl} --model.num_of_finetune 2
 python trainer_cls.py ${common_args} --logger.exp_name HOSVD_l3_var0.8_${usr_group_kl} --model.num_of_finetune 3
 python trainer_cls.py ${common_args} --logger.exp_name HOSVD_l4_var0.8_${usr_group_kl} --model.num_of_finetune 4
-python trainer_cls.py ${common_args} --logger.exp_name HOSVD_l5_var0.8_${usr_group_kl} --model.num_of_finetune 5
-python trainer_cls.py ${common_args} --logger.exp_name HOSVD_l6_var0.8_${usr_group_kl} --model.num_of_finetune 6
-python trainer_cls.py ${common_args} --logger.exp_name HOSVD_l7_var0.8_${usr_group_kl} --model.num_of_finetune 7
-python trainer_cls.py ${common_args} --logger.exp_name HOSVD_l8_var0.8_${usr_group_kl} --model.num_of_finetune 8
-python trainer_cls.py ${common_args} --logger.exp_name HOSVD_l9_var0.8_${usr_group_kl} --model.num_of_finetune 9
-python trainer_cls.py ${common_args} --logger.exp_name HOSVD_l10_var0.8_${usr_group_kl} --model.num_of_finetune 10
-bash /home/infres/lnguyen-23/test/classification/scripts/SVD_with_var_compression/mbv2/pets_mbv2_var0.8.sh
-bash /home/infres/lnguyen-23/test/classification/scripts/HOSVD_with_var_compression/mbv2/cub200_mbv2_var0.8.sh
-bash /home/infres/lnguyen-23/test/classification/scripts/HOSVD_with_var_compression/mbv2/flowers102_mbv2_var0.8.sh
-bash /home/infres/lnguyen-23/test/classification/scripts/SVD_with_var_compression/mbv2/cub200_mbv2_var0.8.sh
-bash /home/infres/lnguyen-23/test/classification/scripts/SVD_with_var_compression/mbv2/flowers102_mbv2_var0.8.sh
+# python trainer_cls.py ${common_args} --logger.exp_name HOSVD_l5_var0.8_${usr_group_kl} --model.num_of_finetune 5
+# python trainer_cls.py ${common_args} --logger.exp_name HOSVD_l6_var0.8_${usr_group_kl} --model.num_of_finetune 6
+# python trainer_cls.py ${common_args} --logger.exp_name HOSVD_l7_var0.8_${usr_group_kl} --model.num_of_finetune 7
+# python trainer_cls.py ${common_args} --logger.exp_name HOSVD_l8_var0.8_${usr_group_kl} --model.num_of_finetune 8
+# python trainer_cls.py ${common_args} --logger.exp_name HOSVD_l9_var0.8_${usr_group_kl} --model.num_of_finetune 9
+# python trainer_cls.py ${common_args} --logger.exp_name HOSVD_l10_var0.8_${usr_group_kl} --model.num_of_finetune 10
