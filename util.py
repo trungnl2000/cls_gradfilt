@@ -151,10 +151,12 @@ class Hook: # Lưu lại các input/output size của mô hình
     def hook_fn(self, module, input, output):
         if not self.active:
             return
-        self.input_size = input[0].shape
-        self.output_size = output.shape
+        Input = input[0].clone().detach()
+        Output = output.clone().detach()
+        self.input_size = Input.shape
+        self.output_size = Output.shape
 
-        self.inputs.append(input[0])
+        self.inputs.append(Input)
     def activate(self, active):
         self.active = active
     def remove(self):

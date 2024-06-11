@@ -1,8 +1,8 @@
 import logging
 from pytorch_lightning.utilities.cli import LightningCLI
 from pytorch_lightning.loggers import TensorBoardLogger
-from classification.classification.model_linear import ClassificationModel
-from dataloader.pl_dataset_their import ClsDataset
+from classification.model_linear import ClassificationModel
+from dataloader.pl_dataset_mine import ClsDataset
 import torch
 
 logging.basicConfig(level=logging.INFO)

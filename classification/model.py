@@ -200,14 +200,103 @@ class ClassificationModel(LightningModule):
                 num_element += int(input_size[0] * input_size[1] * input_size[2] * input_size[3])
 
         self.remove_hooks()
+        if self.with_HOSVD_with_var_compression:
+            filename = self.backbone_name + "_HOSVD_" + str(self.SVD_var)
+        elif self.with_avg_batch:
+            filename = self.backbone_name + "_avg_batch"
+        elif self.with_grad_filter:
+            filename = self.backbone_name + "_gradfilt_r" + str(self.filt_radius)
+        elif self.with_SVD_with_var_compression:
+            filename = self.backbone_name + "_SVD_" + str(self.SVD_var)
+        else:
+            filename = self.backbone_name + "_base"
+
+        def write_to_txt(filename, content):
+            if not os.path.exists("mem_res/"):
+                os.makedirs("mem_res/")
+            filename = "mem_res/" + filename + ".txt"
+            try:
+                with open(filename, 'a') as file:
+                    file.write(content + '\n')
+            except FileNotFoundError:
+                with open(filename, 'w') as file:
+                    file.write(content + '\n')
 
         if unit == "Byte":
+            res = str(num_element*element_size)
+            write_to_txt(filename, res)
             return str(num_element*element_size) + " Bytes"
         if unit == "MB":
-            return str(round((num_element*element_size)/(1024*1024), 2)) + " MB"
+            res = str((num_element*element_size)/(1024*1024))
+            write_to_txt(filename, res)
+            return res + " MB"
         elif unit == "KB":
-            return str(round((num_element*element_size)/(1024), 2)) + " KB"
-            # return num_element
+            res = str((num_element*element_size)/(1024))
+            write_to_txt(filename, res)
+            return res + " KB"
+        else:
+            raise ValueError("Unit is not suitable")
+        
+
+    def get_activation_size_during_training(self, element_size=4, unit="MB"): # element_size = 4 bytes
+        print("Logging activation mem... ")
+        # Dùng cho SVD và HOSVD
+        _, first_hook = next(iter(self.hook.items()))
+        if first_hook.active:
+            logging.info("Hook is activated")
+        else:
+            logging.info("[Warning] Hook is not activated !!")
+
+        num_element = 0
+        for name in self.hook:
+            if isinstance(self.hook[name].module, Conv2dSVD_with_var):
+                ############## Kiểu reshape activation map theo dim
+                from custom_op.conv_svd_with_var import truncated_svd
+                num_element_all = 0
+                for input in self.hook[name].inputs:
+                    Uk_Sk, Vk_t = truncated_svd(input, var=self.SVD_var)
+                    num_element_all += Uk_Sk.numel() + Vk_t.numel()
+                num_element += num_element_all/len(self.hook[name].inputs)
+            
+            elif isinstance(self.hook[name].module, Conv2dHOSVD_with_var):
+                ############## Kiểu reshape activation map theo dim
+                from custom_op.conv_hosvd_with_var import hosvd
+                num_element_all = 0
+                for input in self.hook[name].inputs:
+                    S, u0, u1, u2, u3 = hosvd(input, var=self.SVD_var)
+                    num_element_all += S.numel() + u0.numel() + u1.numel() + u2.numel() + u3.numel()
+                    # print(name, ": ", input.shape, " ----- ", S.numel() + u0.numel() + u1.numel() + u2.numel() + u3.numel(), " --- ")
+                num_element += num_element_all/len(self.hook[name].inputs)
+        if self.with_HOSVD_with_var_compression:
+            filename = self.backbone_name + "_HOSVD_" + str(self.SVD_var)
+        elif self.with_SVD_with_var_compression:
+            filename = self.backbone_name + "_SVD_" + str(self.SVD_var)
+            
+        def write_to_txt(filename, content):
+            if not os.path.exists("mem_res/"):
+                os.makedirs("mem_res/")
+            filename = "mem_res/" + filename + ".txt"
+            try:
+                with open(filename, 'a') as file:
+                    file.write(f"{self.current_epoch} {content}\n")
+                    # file.write(self.current_epoch + " " + content + '\n')
+            except FileNotFoundError:
+                with open(filename, 'w') as file:
+                    file.write(f"{self.current_epoch} {content}\n")
+                    # file.write(self.current_epoch + " " + content + '\n')
+
+        if unit == "Byte":
+            res = str(num_element*element_size)
+            write_to_txt(filename, res)
+            return str(num_element*element_size) + " Bytes"
+        if unit == "MB":
+            res = str((num_element*element_size)/(1024*1024))
+            write_to_txt(filename, res)
+            return res + " MB"
+        elif unit == "KB":
+            res = str((num_element*element_size)/(1024))
+            write_to_txt(filename, res)
+            return res + " KB"
         else:
             raise ValueError("Unit is not suitable")
 
@@ -374,6 +463,9 @@ class ClassificationModel(LightningModule):
             mean_acc = th.stack([o['acc'] for o in outputs]).mean()
             f.write(f"{self.current_epoch} {mean_acc}")
             f.write("\n")
+        # print("attaching hook: ...")
+        # attach_hooks_for_conv(self, consider_active_only=True)
+        # self.activate_hooks(True)
 
     def validation_step(self, val_batch, batch_idx):
         img, label = val_batch['image'], val_batch['label']
@@ -388,6 +480,11 @@ class ClassificationModel(LightningModule):
         return {'pred': pred, 'prob': probs, 'label': label}
 
     def validation_epoch_end(self, outputs):
+        # if self.current_epoch != 0:
+        #     self.get_activation_size_during_training(unit="Byte")
+        # # self.remove_hooks()
+        # self.hook = {}
+
         f = open(os.path.join(self.logger.log_dir, 'val.log'),
                  'a') if self.logger is not None else None
         acc = self.acc.compute()
