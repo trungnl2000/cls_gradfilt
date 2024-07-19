@@ -32,8 +32,6 @@ class CLI(LightningCLI):
         trainer = super(CLI, self).instantiate_trainer(**kwargs)
         return trainer
 
-from util import attach_hooks_for_conv
-
 
 def run():
     cli = CLI(ClassificationModel, ClsDataset, run=False, save_config_overwrite=True) # Dùng cli để load model và file config cho model

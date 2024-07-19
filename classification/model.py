@@ -56,6 +56,9 @@ class ClassificationModel(LightningModule):
         self.init_lr_prod = init_lr_prod
         self.hook = {} # Hook being a dict: where key is the module name and value is the hook
         self.num_of_finetune = num_of_finetune
+        
+
+        self.svd_size = []
 
         self.k0_hosvd = []
         self.k1_hosvd = []
@@ -70,7 +73,7 @@ class ClassificationModel(LightningModule):
 
         if num_of_finetune == "all": # Nếu finetune toàn bộ
             if with_SVD_with_var_compression:
-                filter_cfgs = {"SVD_var": SVD_var}
+                filter_cfgs = {"SVD_var": SVD_var, "svd_size": self.svd_size}
             elif with_HOSVD_with_var_compression:
                 filter_cfgs = {"SVD_var": SVD_var, "k_hosvd": self.k_hosvd}
             elif with_grad_filter:
@@ -82,7 +85,7 @@ class ClassificationModel(LightningModule):
         elif num_of_finetune > len(filter_cfgs_): # Nếu finetune toàn bộ
             logging.info("[Warning] number of finetuned layers is bigger than the total number of conv layers in the network => Finetune all the network")
             if with_SVD_with_var_compression:
-                filter_cfgs = {"SVD_var": SVD_var}
+                filter_cfgs = {"SVD_var": SVD_var, "svd_size": self.svd_size}
             elif with_HOSVD_with_var_compression:
                 filter_cfgs = {"SVD_var": SVD_var, "k_hosvd": self.k_hosvd}
             elif with_grad_filter:
@@ -101,7 +104,7 @@ class ClassificationModel(LightningModule):
                 elif name in filter_cfgs_.keys(): # Khi duyệt đến layer sẽ được finetune => break. Vì đằng sau các conv2d layer này còn có thể có các lớp fc, gì gì đó mà vẫn cần finetune
                     break
             if with_SVD_with_var_compression:
-                filter_cfgs = {"SVD_var": SVD_var}
+                filter_cfgs = {"SVD_var": SVD_var, "svd_size": self.svd_size}
             elif with_HOSVD_with_var_compression:
                 filter_cfgs = {"SVD_var": SVD_var, "k_hosvd": self.k_hosvd}
             elif with_grad_filter:
@@ -149,7 +152,8 @@ class ClassificationModel(LightningModule):
         for h in self.hook:
             self.hook[h].remove()
         logging.info("Hook is removed")
-    
+    def reset_svd_size(self):
+        self.svd_size.clear()    
     def reset_k_hosvd(self):
         self.k0_hosvd.clear()
         self.k1_hosvd.clear()
@@ -404,7 +408,10 @@ class ClassificationModel(LightningModule):
             return logit
 
     def training_step(self, train_batch, batch_idx):
-        self.reset_k_hosvd() # Reset logged k which is used for logging memory for HOSVD
+        if self.with_HOSVD_with_var_compression:
+            self.reset_k_hosvd() # Reset logged k which is used for logging memory for HOSVD
+        if self.with_SVD_with_var_compression:
+            self.reset_svd_size()
 
         if self.set_bn_eval:
             self.bn_eval()
@@ -443,6 +450,23 @@ class ClassificationModel(LightningModule):
         return {'pred': pred, 'prob': probs, 'label': label}
 
     def validation_epoch_end(self, outputs):
+        if self.with_SVD_with_var_compression:
+            device = th.device("cuda" if th.cuda.is_available() else "cpu")
+            svd_size_tensor= th.stack(self.svd_size).t().float() # Chiều 1: 3 kích thước của các thành phần; chiều 2 từng batch của tất cả layer
+            svd_size_tensor = svd_size_tensor.view(3, -1, self.num_of_finetune) # Shape: 3 kích thước của các thành phần, số batch, num_of_finetune
+            svd_size_tensor = svd_size_tensor.permute(2, 1, 0) # Shape: num_of_finetune, số batch, 3 kích thước của các thành phần
+
+            # Tính trung bình của mỗi layer
+            num_element_all = th.mean(svd_size_tensor[:, :, 0] * svd_size_tensor[:, :, 1] + svd_size_tensor[:, :, 1] * svd_size_tensor[:, :, 2], dim=1)
+            # Tổng hợp các giá trị trung bình của mỗi layer
+            num_element = th.sum(num_element_all)
+
+            
+            mem = (num_element*4)#/(1024*1024)
+            with open(os.path.join(self.logger.log_dir, "activation_memory_Byte.log"), "a") as file:
+                file.write(str(self.current_epoch) + "\t" + str(float(mem)) + "\n")
+            
+            
         # Log activation memory at each epoch for HOSVD
         if self.with_HOSVD_with_var_compression:
             device = th.device("cuda" if th.cuda.is_available() else "cpu")
