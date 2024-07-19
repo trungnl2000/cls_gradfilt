@@ -56,25 +56,41 @@ class ClassificationModel(LightningModule):
         self.init_lr_prod = init_lr_prod
         self.hook = {} # Hook being a dict: where key is the module name and value is the hook
         self.num_of_finetune = num_of_finetune
+
+        self.k0_hosvd = []
+        self.k1_hosvd = []
+        self.k2_hosvd = []
+        self.k3_hosvd = []
+        self.raw_size = []
+        self.k_hosvd = [self.k0_hosvd, self.k1_hosvd, self.k2_hosvd, self.k3_hosvd, self.raw_size] # mỗi phần tử của list này là 1 list có độ dài bằng số trained batch * num_of_finetune, vì mỗi batch sẽ có k khác nhau.
+
         #############################################################
         filter_cfgs_ = get_all_conv_with_name(self) # Lấy 1 dict bao gồm tên và các lớp conv2d
         filter_cfgs = {}
 
-        if num_of_finetune == "all":
-            if with_SVD_with_var_compression or with_HOSVD_with_var_compression:
+        if num_of_finetune == "all": # Nếu finetune toàn bộ
+            if with_SVD_with_var_compression:
                 filter_cfgs = {"SVD_var": SVD_var}
+            elif with_HOSVD_with_var_compression:
+                filter_cfgs = {"SVD_var": SVD_var, "k_hosvd": self.k_hosvd}
             elif with_grad_filter:
                 filter_cfgs = {"radius": filt_radius}
+
             filter_cfgs["cfgs"] = filter_cfgs_
             filter_cfgs["type"] = "conv"
+
         elif num_of_finetune > len(filter_cfgs_): # Nếu finetune toàn bộ
             logging.info("[Warning] number of finetuned layers is bigger than the total number of conv layers in the network => Finetune all the network")
-            if with_SVD_with_var_compression or with_HOSVD_with_var_compression:
+            if with_SVD_with_var_compression:
                 filter_cfgs = {"SVD_var": SVD_var}
+            elif with_HOSVD_with_var_compression:
+                filter_cfgs = {"SVD_var": SVD_var, "k_hosvd": self.k_hosvd}
             elif with_grad_filter:
                 filter_cfgs = {"radius": filt_radius}
+
             filter_cfgs["cfgs"] = filter_cfgs_
             filter_cfgs["type"] = "conv"
+
         elif num_of_finetune is not None and num_of_finetune != 0 and num_of_finetune != "all": # Nếu có finetune nhưng không phải toàn bộ
             filter_cfgs_ = dict(list(filter_cfgs_.items())[-num_of_finetune:]) # Chỉ áp dụng filter vào num_of_finetune conv2d layer cuối
             for name, mod in self.named_modules():
@@ -84,8 +100,10 @@ class ClassificationModel(LightningModule):
                         param.requires_grad = False # Freeze layer
                 elif name in filter_cfgs_.keys(): # Khi duyệt đến layer sẽ được finetune => break. Vì đằng sau các conv2d layer này còn có thể có các lớp fc, gì gì đó mà vẫn cần finetune
                     break
-            if with_SVD_with_var_compression or with_HOSVD_with_var_compression:
+            if with_SVD_with_var_compression:
                 filter_cfgs = {"SVD_var": SVD_var}
+            elif with_HOSVD_with_var_compression:
+                filter_cfgs = {"SVD_var": SVD_var, "k_hosvd": self.k_hosvd}
             elif with_grad_filter:
                 filter_cfgs = {"radius": filt_radius}
             filter_cfgs["cfgs"] = filter_cfgs_
@@ -131,6 +149,13 @@ class ClassificationModel(LightningModule):
         for h in self.hook:
             self.hook[h].remove()
         logging.info("Hook is removed")
+    
+    def reset_k_hosvd(self):
+        self.k0_hosvd.clear()
+        self.k1_hosvd.clear()
+        self.k2_hosvd.clear()
+        self.k3_hosvd.clear()
+        self.raw_size.clear()
 
     def get_activation_size(self, trainer, data, consider_active_only=False, element_size=4, unit="MB"): # element_size = 4 bytes
         # Register hook to log input/output size
@@ -154,6 +179,7 @@ class ClassificationModel(LightningModule):
 
         num_element = 0
         for name in self.hook:
+            print(name)
             input_size = th.tensor(self.hook[name].input_size).clone().detach()
             stride = self.hook[name].module.stride
             x_h, x_w = input_size[-2:]
@@ -191,7 +217,7 @@ class ClassificationModel(LightningModule):
                 from custom_op.conv_hosvd_with_var import hosvd
                 num_element_all = 0
                 for input in self.hook[name].inputs:
-                    S, u0, u1, u2, u3 = hosvd(input, var=self.SVD_var)
+                    S, u0, u1, u2, u3, _ = hosvd(input, var=self.SVD_var)
                     num_element_all += S.numel() + u0.numel() + u1.numel() + u2.numel() + u3.numel()
                     # print(name, ": ", input.shape, " ----- ", S.numel() + u0.numel() + u1.numel() + u2.numel() + u3.numel(), " --- ")
                 num_element += num_element_all/len(self.hook[name].inputs)
@@ -237,68 +263,6 @@ class ClassificationModel(LightningModule):
         else:
             raise ValueError("Unit is not suitable")
         
-
-    def get_activation_size_during_training(self, element_size=4, unit="MB"): # element_size = 4 bytes
-        print("Logging activation mem... ")
-        # Dùng cho SVD và HOSVD
-        _, first_hook = next(iter(self.hook.items()))
-        if first_hook.active:
-            logging.info("Hook is activated")
-        else:
-            logging.info("[Warning] Hook is not activated !!")
-
-        num_element = 0
-        for name in self.hook:
-            if isinstance(self.hook[name].module, Conv2dSVD_with_var):
-                ############## Kiểu reshape activation map theo dim
-                from custom_op.conv_svd_with_var import truncated_svd
-                num_element_all = 0
-                for input in self.hook[name].inputs:
-                    Uk_Sk, Vk_t = truncated_svd(input, var=self.SVD_var)
-                    num_element_all += Uk_Sk.numel() + Vk_t.numel()
-                num_element += num_element_all/len(self.hook[name].inputs)
-            
-            elif isinstance(self.hook[name].module, Conv2dHOSVD_with_var):
-                ############## Kiểu reshape activation map theo dim
-                from custom_op.conv_hosvd_with_var import hosvd
-                num_element_all = 0
-                for input in self.hook[name].inputs:
-                    S, u0, u1, u2, u3 = hosvd(input, var=self.SVD_var)
-                    num_element_all += S.numel() + u0.numel() + u1.numel() + u2.numel() + u3.numel()
-                    # print(name, ": ", input.shape, " ----- ", S.numel() + u0.numel() + u1.numel() + u2.numel() + u3.numel(), " --- ")
-                num_element += num_element_all/len(self.hook[name].inputs)
-        if self.with_HOSVD_with_var_compression:
-            filename = self.backbone_name + "_HOSVD_" + str(self.SVD_var)
-        elif self.with_SVD_with_var_compression:
-            filename = self.backbone_name + "_SVD_" + str(self.SVD_var)
-            
-        def write_to_txt(filename, content):
-            if not os.path.exists("mem_res/"):
-                os.makedirs("mem_res/")
-            filename = "mem_res/" + filename + ".txt"
-            try:
-                with open(filename, 'a') as file:
-                    file.write(f"{self.current_epoch} {content}\n")
-                    # file.write(self.current_epoch + " " + content + '\n')
-            except FileNotFoundError:
-                with open(filename, 'w') as file:
-                    file.write(f"{self.current_epoch} {content}\n")
-                    # file.write(self.current_epoch + " " + content + '\n')
-
-        if unit == "Byte":
-            res = str(num_element*element_size)
-            write_to_txt(filename, res)
-            return str(num_element*element_size) + " Bytes"
-        if unit == "MB":
-            res = str((num_element*element_size)/(1024*1024))
-            write_to_txt(filename, res)
-            return res + " MB"
-        elif unit == "KB":
-            res = str((num_element*element_size)/(1024))
-            write_to_txt(filename, res)
-            return res + " KB"
-        else:
-            raise ValueError("Unit is not suitable")
 
 
     # def compute_Conv2d_flops(self, trainer, data, consider_active_only=False, element_size=4, unit="MB"): # element_size = 4 bytes
@@ -440,6 +404,8 @@ class ClassificationModel(LightningModule):
             return logit
 
     def training_step(self, train_batch, batch_idx):
+        self.reset_k_hosvd() # Reset logged k which is used for logging memory for HOSVD
+
         if self.set_bn_eval:
             self.bn_eval()
         img, label = train_batch['image'], train_batch['label']
@@ -453,7 +419,7 @@ class ClassificationModel(LightningModule):
         self.log("Train/Acc", acc)
         return {'loss': loss, 'acc': acc}
 
-    def training_epoch_end(self, outputs): 
+    def training_epoch_end(self, outputs):
         with open(os.path.join(self.logger.log_dir, 'train_loss.log'), 'a') as f:
             mean_loss = th.stack([o['loss'] for o in outputs]).mean()
             f.write(f"{self.current_epoch} {mean_loss}")
@@ -463,9 +429,6 @@ class ClassificationModel(LightningModule):
             mean_acc = th.stack([o['acc'] for o in outputs]).mean()
             f.write(f"{self.current_epoch} {mean_acc}")
             f.write("\n")
-        # print("attaching hook: ...")
-        # attach_hooks_for_conv(self, consider_active_only=True)
-        # self.activate_hooks(True)
 
     def validation_step(self, val_batch, batch_idx):
         img, label = val_batch['image'], val_batch['label']
@@ -480,13 +443,55 @@ class ClassificationModel(LightningModule):
         return {'pred': pred, 'prob': probs, 'label': label}
 
     def validation_epoch_end(self, outputs):
-        # if self.current_epoch != 0:
-        #     self.get_activation_size_during_training(unit="Byte")
-        # # self.remove_hooks()
-        # self.hook = {}
+        # Log activation memory at each epoch for HOSVD
+        if self.with_HOSVD_with_var_compression:
+            device = th.device("cuda" if th.cuda.is_available() else "cpu")
 
-        f = open(os.path.join(self.logger.log_dir, 'val.log'),
-                 'a') if self.logger is not None else None
+            # New way (optimized)
+            k_hosvd_tensor = th.tensor(self.k_hosvd[:4], device=device).float() # Chiều 1: dimension (4 cái k); chiều 2: k của từng batch của tất cả layer
+            k_hosvd_tensor = k_hosvd_tensor.view(4, -1, self.num_of_finetune) # Shape: 4 cái k, số batch, num_of_finetune
+            k_hosvd_tensor = k_hosvd_tensor.permute(2, 1, 0) # Shape: num_of_finetune, số batch, 4 cái k
+            
+
+            raw_shapes = th.tensor(self.k_hosvd[4], device=device).reshape(-1, self.num_of_finetune, 4) # Shape: num of batch, num_of_finetune, 4 chiều
+            raw_shapes = raw_shapes.permute(1, 0, 2) # Shape: num_of_finetune, num of batch, 4 chiều
+
+            '''
+            Duyệt theo từng layer (chiều 1: num_of_finetune) -> Duyệt theo từng batch (chiều 2: số batch), tính số phần tử ở đây rồi suy ra trung bình số phần tử tại mỗi batch tại mỗi layer
+            -> Cộng tất cả ra trung bình số phần tử tại mỗi batch của các layer
+
+            '''
+            num_element_all = th.sum(
+                k_hosvd_tensor[:, :, 0] * k_hosvd_tensor[:, :, 1] * k_hosvd_tensor[:, :, 2] * k_hosvd_tensor[:, :, 3]
+                + k_hosvd_tensor[:, :, 0] * raw_shapes[:, :, 0]
+                + k_hosvd_tensor[:, :, 1] * raw_shapes[:, :, 1]
+                + k_hosvd_tensor[:, :, 2] * raw_shapes[:, :, 2]
+                + k_hosvd_tensor[:, :, 3] * raw_shapes[:, :, 3],
+                dim=1
+            )
+            num_element = th.sum(num_element_all) / k_hosvd_tensor.shape[1]
+
+            # # Old way
+            # k_hosvd_tensor = th.tensor(self.k_hosvd[:4]).float() # Chiều 1: dimension (4 cái k); chiều 2: k của từng batch của tất cả layer
+            # k_hosvd_tensor = k_hosvd_tensor.t()
+            # num_element = 0
+            # for i in range(self.num_of_finetune): # Duyệt qua các layer
+            #     raw_shape = self.k_hosvd[4][i] # Raw shape của activation map tại mỗi layer, đây là một tensor
+            #     selected_rows = k_hosvd_tensor[i::self.num_of_finetune] # 4 chuỗi k của một layer
+            #     num_element_all = 0
+            #     for row in selected_rows:
+            #         num_element_all += row[0] * row[1] * row[2] * row[3] \
+            #         + row[0] * raw_shape[0] + row[1] * raw_shape[1] \
+            #         + row[2] * raw_shape[2] + row[3] * raw_shape[3]
+            #     num_element += num_element_all/selected_rows.shape[0]
+
+               
+            mem = (num_element*4)#/(1024*1024)
+            with open(os.path.join(self.logger.log_dir, "activation_memory_Byte.log"), "a") as file:
+                file.write(str(self.current_epoch) + "\t" + str(float(mem)) + "\n")
+
+            
+        f = open(os.path.join(self.logger.log_dir, 'val.log'), 'a') if self.logger is not None else None
         acc = self.acc.compute()
         if self.logger is not None:
             f.write(f"{self.current_epoch} {acc}\n")

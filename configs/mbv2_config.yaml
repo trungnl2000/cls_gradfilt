@@ -24,8 +24,8 @@ model:
   backbone_args:
     in_channels: 3
     output_stride: 32
-    # weights: "full_imagenet"
-    weights: "imagenet"
+    weights: "full_imagenet"
+    # weights: "imagenet"
   learning_rate: 3e-4
   weight_decay: 1e-4
   set_bn_eval: True

@@ -137,14 +137,14 @@ def add_avg_batch_layer(module: nn.Module, cfg):
 
 def add_hosvd_with_var_filter(module: nn.Module, cfg):
     if cfg['type'] == 'cbr':
-        module.conv = wrap_convHOSVD_with_var_layer(module.conv, cfg["SVD_var"], True)
+        module.conv = wrap_convHOSVD_with_var_layer(module.conv, cfg["SVD_var"], True, cfg["k_hosvd"])
     elif cfg['type'] == 'resnet_basic_block':
-        module.conv1 = wrap_convHOSVD_with_var_layer(module.conv1, cfg["SVD_var"], True)
-        module.conv2 = wrap_convHOSVD_with_var_layer(module.conv2, cfg["SVD_var"], True)
+        module.conv1 = wrap_convHOSVD_with_var_layer(module.conv1, cfg["SVD_var"], True, cfg["k_hosvd"])
+        module.conv2 = wrap_convHOSVD_with_var_layer(module.conv2, cfg["SVD_var"], True, cfg["k_hosvd"])
     elif cfg['type'] == 'resnet_bottleneck_block':
-        module.conv1 = wrap_convHOSVD_with_var_layer(module.conv1, cfg["SVD_var"], True)
-        module.conv2 = wrap_convHOSVD_with_var_layer(module.conv2, cfg["SVD_var"], True)
-        module.conv3 = wrap_convHOSVD_with_var_layer(module.conv3, cfg["SVD_var"], True)
+        module.conv1 = wrap_convHOSVD_with_var_layer(module.conv1, cfg["SVD_var"], True, cfg["k_hosvd"])
+        module.conv2 = wrap_convHOSVD_with_var_layer(module.conv2, cfg["SVD_var"], True, cfg["k_hosvd"])
+        module.conv3 = wrap_convHOSVD_with_var_layer(module.conv3, cfg["SVD_var"], True, cfg["k_hosvd"])
     elif cfg['type'] == 'resnet_layer':
         assert isinstance(module, nn.Sequential)
         ccfg = deepcopy(cfg)
@@ -152,27 +152,27 @@ def add_hosvd_with_var_filter(module: nn.Module, cfg):
         for blk_idx, blk in enumerate(module):
             add_hosvd_with_var_filter(blk, ccfg)
     elif cfg['type'] == 'ConvNormActivation':
-        module[0] = wrap_convHOSVD_with_var_layer(module[0], cfg["SVD_var"], True)
+        module[0] = wrap_convHOSVD_with_var_layer(module[0], cfg["SVD_var"], True, cfg["k_hosvd"])
     elif cfg['type'] == 'InvertedResidual':
         count = len(module.conv)
-        module.conv[-2] = wrap_convHOSVD_with_var_layer(module.conv[-2], cfg["SVD_var"], True)
+        module.conv[-2] = wrap_convHOSVD_with_var_layer(module.conv[-2], cfg["SVD_var"], True, cfg["k_hosvd"])
         for i in range(count - 2):
-            module.conv[i][0] = wrap_convHOSVD_with_var_layer(module.conv[i][0], cfg["SVD_var"], True)
+            module.conv[i][0] = wrap_convHOSVD_with_var_layer(module.conv[i][0], cfg["SVD_var"], True, cfg["k_hosvd"])
     elif cfg['type'] == "MCUNetBlock":
         # if hasattr(module.mobile_inverted_conv, 'inverted_bottleneck'):
         if module.mobile_inverted_conv.inverted_bottleneck is not None:
             module.mobile_inverted_conv.inverted_bottleneck.conv = wrap_convHOSVD_with_var_layer(
-                module.mobile_inverted_conv.inverted_bottleneck.conv, cfg["SVD_var"], True)
+                module.mobile_inverted_conv.inverted_bottleneck.conv, cfg["SVD_var"], True, cfg["k_hosvd"])
         # if hasattr(module.mobile_inverted_conv, 'depth_conv'):
         if module.mobile_inverted_conv.depth_conv is not None:
             module.mobile_inverted_conv.depth_conv.conv = wrap_convHOSVD_with_var_layer(
-                module.mobile_inverted_conv.depth_conv.conv, cfg["SVD_var"], True)
+                module.mobile_inverted_conv.depth_conv.conv, cfg["SVD_var"], True, cfg["k_hosvd"])
         # if hasattr(module.mobile_inverted_conv, 'point_linear'):
         if module.mobile_inverted_conv.point_linear is not None:
             module.mobile_inverted_conv.point_linear.conv = wrap_convHOSVD_with_var_layer(
-                module.mobile_inverted_conv.point_linear.conv, cfg["SVD_var"], True)
+                module.mobile_inverted_conv.point_linear.conv, cfg["SVD_var"], True, cfg["k_hosvd"])
     elif cfg['type'] == 'conv':
-        module = wrap_convHOSVD_with_var_layer(module, cfg["SVD_var"], True)
+        module = wrap_convHOSVD_with_var_layer(module, cfg["SVD_var"], True, cfg["k_hosvd"])
     else:
         raise NotImplementedError
     return module
