@@ -12,6 +12,7 @@ class CLI(LightningCLI):
     def add_arguments_to_parser(self, parser):
         parser.add_argument("--logger.save_dir", default='./runs')
         parser.add_argument("--logger.exp_name", default='test')
+        parser.add_argument("--checkpoint", default=None)
 
     def instantiate_trainer(self, **kwargs):
         if 'fit' in self.config.keys():
@@ -40,9 +41,15 @@ def run():
     data = cli.datamodule
     
     # logging.info(str(model))
-    trainer.validate(model, datamodule=data)
-    trainer.fit(model, data)
-    # trainer.validate(model, datamodule=data)
+
+    if cli.config['checkpoint'] is not None:
+        # trainer.validate(model, datamodule=data, ckpt_path=cli.config['checkpoint'])
+        trainer.fit(model, data, ckpt_path=cli.config['checkpoint'])
+        # trainer.validate(model, datamodule=data)
+    else:
+        # trainer.validate(model, datamodule=data)
+        trainer.fit(model, data)
+        # trainer.validate(model, datamodule=data)
 
 
 run()
