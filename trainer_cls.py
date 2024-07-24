@@ -42,7 +42,7 @@ def run():
     
     # logging.info(str(model))
 
-    if cli.config['checkpoint'] is not None:
+    if cli.config['checkpoint'] is not None and cli.config['checkpoint'] != 'None':
         # trainer.validate(model, datamodule=data, ckpt_path=cli.config['checkpoint'])
         trainer.fit(model, data, ckpt_path=cli.config['checkpoint'])
         # trainer.validate(model, datamodule=data)
