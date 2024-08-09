@@ -38,7 +38,7 @@ class Linear_op(Function):
     @staticmethod
     # def forward(ctx, input, weight, bias=None, var=0.9):
     def forward(ctx, *args):
-        input, weight, bias, var = args
+        input, weight, bias, var, svd_size = args
 
         output = th.matmul(input, weight.t())
         if bias is not None:
@@ -46,6 +46,9 @@ class Linear_op(Function):
         # output = linear(input, weight, bias)
 
         input_Uk_Sk, input_Vk_t = truncated_svd(input, var=var)
+
+        svd_size.append(th.tensor([input_Uk_Sk.shape[0], input_Vk_t.shape[0], input_Vk_t.shape[1]], device=input_Uk_Sk.device))
+
         ctx.save_for_backward(input_Uk_Sk, input_Vk_t, th.tensor(input.shape), weight, bias)
         
         return output
@@ -72,7 +75,7 @@ class Linear_op(Function):
 
         if bias is not None and ctx.needs_input_grad[2]:
             grad_bias = grad_output.sum(0).squeeze(0)
-        return grad_input, grad_weight, grad_bias, None
+        return grad_input, grad_weight, grad_bias, None, None
 
 class Linear_SVD(nn.Linear):
     def __init__(
@@ -83,7 +86,8 @@ class Linear_SVD(nn.Linear):
             device=None,
             dtype=None,
             activate=False,
-            var=0.9):
+            var=0.9,
+            svd_size=None):
         super(Linear_SVD, self).__init__(
             in_features=in_features,
             out_features=out_features,
@@ -93,22 +97,24 @@ class Linear_SVD(nn.Linear):
         )
         self.activate = activate
         self.var = var
+        self.svd_size = svd_size
 
     def forward(self, input):
         if self.activate:
-            output = Linear_op.apply(input, self.weight, self.bias, self.var)
+            output = Linear_op.apply(input, self.weight, self.bias, self.var, self.svd_size)
         else:
             output = super().forward(input)
         return output
     
 
-def wrap_linear_svd_layer(linear, SVD_var, active):
+def wrap_linear_svd_layer(linear, SVD_var, active, svd_size):
     has_bias = (linear.bias is not None)
     new_linear = Linear_SVD(in_features=linear.in_features,
                         out_features=linear.out_features,
                         bias=has_bias,
                         activate=active,
-                        var=SVD_var
+                        var=SVD_var,
+                        svd_size=svd_size
                         )
     new_linear.weight.data = linear.weight.data
     if new_linear.bias is not None:

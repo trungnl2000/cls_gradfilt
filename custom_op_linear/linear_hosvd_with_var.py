@@ -78,7 +78,7 @@ class Linear_op(Function):
     @staticmethod
     # def forward(ctx, input, weight, bias=None, var=0.9):
     def forward(ctx, *args):
-        input, weight, bias, var = args
+        input, weight, bias, var, k_hosvd = args
 
         output = torch.matmul(input, weight.t())
         if bias is not None:
@@ -87,9 +87,23 @@ class Linear_op(Function):
 
         if input.dim() == 2:
             S, u0, u1 = hosvd(input, var=var)
+
+            k_hosvd[0].append(u0.shape[1])
+            k_hosvd[1].append(u1.shape[1])
+            k_hosvd[2].append(1) # Choose 1 because insert 0 in raw_shape, so it's ok
+            k_hosvd[3].append(1)
+            k_hosvd[4].append(torch.tensor([input.shape[0], input.shape[1], 0, 0]))
+
             ctx.save_for_backward(S, u0, u1, weight, bias)
         else:
             S, u0, u1, u2, u3 = hosvd(input, var=var)
+
+            k_hosvd[0].append(u0.shape[1])
+            k_hosvd[1].append(u1.shape[1])
+            k_hosvd[2].append(u2.shape[1])
+            k_hosvd[3].append(u3.shape[1])
+            k_hosvd[4].append(input.shape)
+
             ctx.save_for_backward(S, u0, u1, u2, u3, weight, bias)
         
         return output
@@ -121,7 +135,7 @@ class Linear_op(Function):
 
         if bias is not None and ctx.needs_input_grad[2]:
             grad_bias = grad_output.sum(0).squeeze(0)
-        return grad_input, grad_weight, grad_bias, None
+        return grad_input, grad_weight, grad_bias, None, None
 
 class Linear_HOSVD(nn.Linear):
     def __init__(
@@ -132,7 +146,8 @@ class Linear_HOSVD(nn.Linear):
             device=None,
             dtype=None,
             activate=False,
-            var=0.9):
+            var=0.9,
+            k_hosvd = None):
         super(Linear_HOSVD, self).__init__(
             in_features=in_features,
             out_features=out_features,
@@ -142,22 +157,24 @@ class Linear_HOSVD(nn.Linear):
         )
         self.activate = activate
         self.var = var
+        self.k_hosvd = k_hosvd
 
     def forward(self, input):
         if self.activate:
-            output = Linear_op.apply(input, self.weight, self.bias, self.var)
+            output = Linear_op.apply(input, self.weight, self.bias, self.var, self.k_hosvd)
         else:
             output = super().forward(input)
         return output
     
 
-def wrap_linear_hosvd_layer(linear, SVD_var, active):
+def wrap_linear_hosvd_layer(linear, SVD_var, active, k_hosvd):
     has_bias = (linear.bias is not None)
     new_linear = Linear_HOSVD(in_features=linear.in_features,
                         out_features=linear.out_features,
                         bias=has_bias,
                         activate=active,
-                        var=SVD_var
+                        var=SVD_var,
+                        k_hosvd = k_hosvd
                         )
     new_linear.weight.data = linear.weight.data
     if new_linear.bias is not None:

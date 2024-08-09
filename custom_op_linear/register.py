@@ -18,7 +18,7 @@ def register_HOSVD_with_var(module, cfgs):
         path_seq = name.split('.')
         target = reduce(getattr, path_seq, module)
 
-        upd_layer = wrap_linear_hosvd_layer(target, cfgs["SVD_var"], True)
+        upd_layer = wrap_linear_hosvd_layer(target, cfgs["SVD_var"], True, cfgs["k_hosvd"])
 
         parent = reduce(getattr, path_seq[:-1], module)
         setattr(parent, path_seq[-1], upd_layer)
@@ -48,7 +48,7 @@ def register_SVD_with_var(module, cfgs):
         path_seq = name.split('.')
         target = reduce(getattr, path_seq, module)
 
-        upd_layer = wrap_linear_svd_layer(target, cfgs["SVD_var"], True)
+        upd_layer = wrap_linear_svd_layer(target, cfgs["SVD_var"], True, cfgs["svd_size"])
 
         parent = reduce(getattr, path_seq[:-1], module)
         setattr(parent, path_seq[-1], upd_layer)

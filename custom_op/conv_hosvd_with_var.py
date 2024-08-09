@@ -103,21 +103,24 @@ class Conv2dHOSVDop_with_var(Function):
             u0: B, K[0] -> B, K[0], 1, 1, 1
             grad_output: (B, groups*out_channels_per_group+out_channels_per_group, H_prime, W_prime) -> (B, 1, groups*out_channels_per_group+out_channels_per_group, H_prime, W_prime)
             '''
-            Z1 = th.sum(u0.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1) * grad_output.unsqueeze(1), dim=0)  # Shape: (K[0], groups*out_channels_per_group+out_channels_per_group, H_prime, W_prime)
+            # Z1 = th.sum(u0.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1) * grad_output.unsqueeze(1), dim=0)  # Shape: (K[0], groups*out_channels_per_group+out_channels_per_group, H_prime, W_prime)
+            Z1 = th.einsum("bk,bchw->bkchw", u0, grad_output).sum(dim=0) # Shape: (K[0], groups*out_channels_per_group+out_channels_per_group, H_prime, W_prime)
             #______________________________________________________________________________________________________________
             # Calculate Z2:
             '''
             S:              shape: K[0], K[1], K[2], K[3]   ->  K[0], K[1], 1, K[2], K[3]
             u2_padded:      shape: H_padded, K[2]           ->  1, 1, H_padded, K[2], 1
             '''
-            Z2 = (S.unsqueeze(2) * u2_padded.unsqueeze(0).unsqueeze(1).unsqueeze(-1)).sum(dim=3) # Shape: K[0], K[1], H_padded, K[3]
+            # Z2 = (S.unsqueeze(2) * u2_padded.unsqueeze(0).unsqueeze(1).unsqueeze(-1)).sum(dim=3) # Shape: K[0], K[1], H_padded, K[3]
+            Z2 = th.einsum("abcd,hc->abhcd", S, u2_padded).sum(dim=3) # Shape: K[0], K[1], H_padded, K[3]
             #______________________________________________________________________________________________________________
             # Calculate Z3:
             '''
             Z2:         K[0], K[1], H_padded, K[3]  -> K[0], K[1], H_padded, 1, K[3]
             u3_padded:  W_padded, K[3]              -> 1, 1, 1, W_padded, K[3]
             '''
-            Z3 = (Z2.unsqueeze(3) * u3_padded.unsqueeze(0).unsqueeze(0).unsqueeze(0)).sum(dim=4) # Shape: K[0], K[1], H_padded, W_padded
+            # Z3 = (Z2.unsqueeze(3) * u3_padded.unsqueeze(0).unsqueeze(0).unsqueeze(0)).sum(dim=4) # Shape: K[0], K[1], H_padded, W_padded
+            Z3 = th.einsum("abhd,wd->abhwd", Z2, u3_padded).sum(dim=4) # Shape: K[0], K[1], H_padded, W_padded
             #______________________________________________________________________________________________________________
             # Calculate Z4
             # Create indices m, k, n, l
@@ -141,16 +144,19 @@ class Conv2dHOSVDop_with_var(Function):
             Z3: K[0], K[1], K_H, H_prime, K_W, W_prime  -> K[0], 1, K[1], K_H, H_prime, K_W, W_prime
             Z1: K[0], Cg_prime, H_prime, W_prime        -> K[0], Cg_prime, 1, 1, H_prime, 1, W_prime
             '''
-            Z4 = (Z3_selected.unsqueeze(1)*Z1.unsqueeze(2).unsqueeze(3).unsqueeze(5)).sum(dim=0).sum(dim=3).sum(dim=4) # Shape: K[0], Cg_prime, K[1], K_H, H_prime, K_W, W_prime -> Cg_prime, K[1], K_H, K_W,
+            # Z4 = (Z3_selected.unsqueeze(1)*Z1.unsqueeze(2).unsqueeze(3).unsqueeze(5)).sum(dim=0).sum(dim=3).sum(dim=4) # Shape: K[0], Cg_prime, K[1], K_H, H_prime, K_W, W_prime -> Cg_prime, K[1], K_H, K_W,
+            Z4 = th.einsum("abkhlw,achw->acbkhlw", Z3_selected, Z1).sum(dim=0).sum(dim=3).sum(dim=4) # Shape: K[0], Cg_prime, K[1], K_H, H_prime, K_W, W_prime -> Cg_prime, K[1], K_H, K_W,
             
             #______________________________________________________________________________________________________________
             # calculate grad_weight
             if groups == C == C_prime:
-                grad_weight = (Z4 * u1.unsqueeze(-1).unsqueeze(-1)).sum(dim=1).unsqueeze(1)
+                # grad_weight = (Z4 * u1.unsqueeze(-1).unsqueeze(-1)).sum(dim=1).unsqueeze(1)
+                grad_weight = th.einsum("ckhw,ck->ckhw", Z4, u1).sum(dim=1).unsqueeze(1)
             elif groups == 1:
-                Z4_expanded = Z4.unsqueeze(1) #Shape Cg_prime, K[3], K_H, K_W -> Cg_prime, 1, K[3], K_H, K_W
-                u1_expanded = u1.unsqueeze(0).unsqueeze(-1).unsqueeze(-1)  #Shape Cg, K[3] -> 1, Cg, K[3], 1, 1
-                grad_weight = (Z4_expanded * u1_expanded).sum(dim=2)
+                # Z4_expanded = Z4.unsqueeze(1) #Shape Cg_prime, K[1], K_H, K_W -> Cg_prime, 1, K[1], K_H, K_W
+                # u1_expanded = u1.unsqueeze(0).unsqueeze(-1).unsqueeze(-1)  #Shape Cg, K[1] -> 1, Cg, K[1], 1, 1
+                # grad_weight = (Z4_expanded * u1_expanded).sum(dim=2)
+                grad_weight = th.einsum("ckhw,gk->cgkhw", Z4, u1).sum(dim=2)
             else: # Havent tensorlize
                 print("Havent optimized")
 

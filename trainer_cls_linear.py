@@ -50,7 +50,7 @@ def run():
     # logging.info(f"activation size: {model.get_activation_size(trainer, data, consider_active_only=True, unit='Byte')}") # Dùng cho kiểu hook mới
 
     trainer.fit(model, data)
-    trainer.validate(model, datamodule=data)
+    # trainer.validate(model, datamodule=data)
 
 
 run()

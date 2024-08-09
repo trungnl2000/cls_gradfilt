@@ -5,7 +5,7 @@ import torch as th
 import torch.nn as nn
 from pytorch_lightning import LightningModule
 from torchmetrics import Accuracy
-from custom_op.register import register_filter, register_SVD_with_var, register_conv_batch, register_HOSVD_with_var
+from custom_op.register import register_filter, register_SVD_with_var, register_conv_batch, register_HOSVD_with_var, register_GKPD_HOSVD
 from custom_op.conv_avg import Conv2dAvg
 from custom_op.conv_svd_with_var import Conv2dSVD_with_var
 from custom_op.conv_avg_batch import Conv2d_Avg_Batch
@@ -21,7 +21,7 @@ class ClassificationModel(LightningModule):
                  learning_rate, weight_decay, set_bn_eval, load = None,
 
                  num_of_finetune=None, 
-                 with_avg_batch=False, with_HOSVD_with_var_compression = False, with_SVD_with_var_compression=False, with_grad_filter=False,
+                 with_avg_batch=False, with_HOSVD_with_var_compression = False, with_SVD_with_var_compression=False, with_grad_filter=False, with_gkpd_hosvd=False,
                  SVD_var=None, filt_radius=None,
                  
                  use_sgd=False, momentum=0.9, anneling_steps=8008, scheduler_interval='step',
@@ -44,6 +44,7 @@ class ClassificationModel(LightningModule):
         ##
         self.with_avg_batch = with_avg_batch
         self.with_HOSVD_with_var_compression = with_HOSVD_with_var_compression
+        self.with_gkpd_hosvd = with_gkpd_hosvd
         self.with_SVD_with_var_compression = with_SVD_with_var_compression
         self.with_grad_filter = with_grad_filter
         self.SVD_var = SVD_var
@@ -56,6 +57,8 @@ class ClassificationModel(LightningModule):
         self.init_lr_prod = init_lr_prod
         self.hook = {} # Hook being a dict: where key is the module name and value is the hook
         self.num_of_finetune = num_of_finetune
+
+        # self.num_of_validation_batch = 0
         
 
         self.svd_size = []
@@ -67,15 +70,39 @@ class ClassificationModel(LightningModule):
         self.raw_size = []
         self.k_hosvd = [self.k0_hosvd, self.k1_hosvd, self.k2_hosvd, self.k3_hosvd, self.raw_size] # mỗi phần tử của list này là 1 list có độ dài bằng số trained batch * num_of_finetune, vì mỗi batch sẽ có k khác nhau.
 
+        self.k1_gkpd_hosvd_1 = []
+        self.k2_gkpd_hosvd_1 = []
+        self.k3_gkpd_hosvd_1 = []
+        self.k4_gkpd_hosvd_1 = []
+        self.raw_size_1 = []
+        self.k_gkpd_hosvd_1 = [self.k1_gkpd_hosvd_1, 
+                                self.k2_gkpd_hosvd_1, 
+                                self.k3_gkpd_hosvd_1, 
+                                self.k4_gkpd_hosvd_1,
+                                self.raw_size_1]
+
+        self.k1_gkpd_hosvd_2 = []
+        self.k2_gkpd_hosvd_2 = []
+        self.k3_gkpd_hosvd_2 = []
+        self.k4_gkpd_hosvd_2 = []
+        self.raw_size_2 = []
+        self.k_gkpd_hosvd_2 = [self.k1_gkpd_hosvd_2, 
+                                self.k2_gkpd_hosvd_2, 
+                                self.k3_gkpd_hosvd_2, 
+                                self.k4_gkpd_hosvd_2,
+                                self.raw_size_2]
         #############################################################
         filter_cfgs_ = get_all_conv_with_name(self) # Lấy 1 dict bao gồm tên và các lớp conv2d
         filter_cfgs = {}
 
         if num_of_finetune == "all": # Nếu finetune toàn bộ
+            self.num_of_finetune = len(filter_cfgs_)
             if with_SVD_with_var_compression:
                 filter_cfgs = {"SVD_var": SVD_var, "svd_size": self.svd_size}
             elif with_HOSVD_with_var_compression:
                 filter_cfgs = {"SVD_var": SVD_var, "k_hosvd": self.k_hosvd}
+            elif with_gkpd_hosvd:
+                filter_cfgs = {"SVD_var": SVD_var, "k_gkpd_hosvd_1": self.k_gkpd_hosvd_1, "k_gkpd_hosvd_2": self.k_gkpd_hosvd_2}
             elif with_grad_filter:
                 filter_cfgs = {"radius": filt_radius}
 
@@ -83,11 +110,14 @@ class ClassificationModel(LightningModule):
             filter_cfgs["type"] = "conv"
 
         elif num_of_finetune > len(filter_cfgs_): # Nếu finetune toàn bộ
+            self.num_of_finetune = len(filter_cfgs_)
             logging.info("[Warning] number of finetuned layers is bigger than the total number of conv layers in the network => Finetune all the network")
             if with_SVD_with_var_compression:
                 filter_cfgs = {"SVD_var": SVD_var, "svd_size": self.svd_size}
             elif with_HOSVD_with_var_compression:
                 filter_cfgs = {"SVD_var": SVD_var, "k_hosvd": self.k_hosvd}
+            elif with_gkpd_hosvd:
+                filter_cfgs = {"SVD_var": SVD_var, "k_gkpd_hosvd_1": self.k_gkpd_hosvd_1, "k_gkpd_hosvd_2": self.k_gkpd_hosvd_2}
             elif with_grad_filter:
                 filter_cfgs = {"radius": filt_radius}
 
@@ -107,6 +137,8 @@ class ClassificationModel(LightningModule):
                 filter_cfgs = {"SVD_var": SVD_var, "svd_size": self.svd_size}
             elif with_HOSVD_with_var_compression:
                 filter_cfgs = {"SVD_var": SVD_var, "k_hosvd": self.k_hosvd}
+            elif with_gkpd_hosvd:
+                filter_cfgs = {"SVD_var": SVD_var, "k_gkpd_hosvd_1": self.k_gkpd_hosvd_1, "k_gkpd_hosvd_2": self.k_gkpd_hosvd_2}
             elif with_grad_filter:
                 filter_cfgs = {"radius": filt_radius}
             filter_cfgs["cfgs"] = filter_cfgs_
@@ -141,6 +173,8 @@ class ClassificationModel(LightningModule):
         elif with_grad_filter:
             register_filter(self, filter_cfgs)
             # logging.info(f"After registering gradient filter: Weight size: {get_total_weight_size(self)}")
+        elif with_gkpd_hosvd:
+            register_GKPD_HOSVD(self, filter_cfgs)
 
 
         self.acc.reset()
@@ -160,6 +194,18 @@ class ClassificationModel(LightningModule):
         self.k2_hosvd.clear()
         self.k3_hosvd.clear()
         self.raw_size.clear()
+    def reset_k_gkpd_hosvd(self):
+        self.k1_gkpd_hosvd_1.clear()
+        self.k2_gkpd_hosvd_1.clear()
+        self.k3_gkpd_hosvd_1.clear()
+        self.k4_gkpd_hosvd_1.clear()
+        self.raw_size_1.clear()
+        
+        self.k1_gkpd_hosvd_2.clear()
+        self.k2_gkpd_hosvd_2.clear()
+        self.k3_gkpd_hosvd_2.clear()
+        self.k4_gkpd_hosvd_2.clear()
+        self.raw_size_2.clear()
 
     def get_activation_size(self, trainer, data, consider_active_only=False, element_size=4, unit="MB"): # element_size = 4 bytes
         # Register hook to log input/output size
@@ -412,6 +458,8 @@ class ClassificationModel(LightningModule):
             self.reset_k_hosvd() # Reset logged k which is used for logging memory for HOSVD
         if self.with_SVD_with_var_compression:
             self.reset_svd_size()
+        if self.with_gkpd_hosvd:
+            self.reset_k_gkpd_hosvd()
 
         if self.set_bn_eval:
             self.bn_eval()
@@ -427,6 +475,75 @@ class ClassificationModel(LightningModule):
         return {'loss': loss, 'acc': acc}
 
     def training_epoch_end(self, outputs):
+
+        # if self.with_SVD_with_var_compression:
+        #     device = th.device("cuda" if th.cuda.is_available() else "cpu")
+        #     svd_size_tensor= th.stack(self.svd_size).t().float() # Chiều 1: 3 kích thước của các thành phần; chiều 2 từng batch của tất cả layer
+        #     svd_size_tensor = svd_size_tensor.view(3, -1, self.num_of_finetune) # Shape: 3 kích thước của các thành phần, số batch, num_of_finetune
+        #     svd_size_tensor = svd_size_tensor.permute(2, 1, 0) # Shape: num_of_finetune, số batch, 3 kích thước của các thành phần
+        #     svd_size_tensor = svd_size_tensor[:, :-self.num_of_validation_batch, :]
+        #     # Tính trung bình của mỗi layer
+        #     num_element_all = th.mean(svd_size_tensor[:, :, 0] * svd_size_tensor[:, :, 1] + svd_size_tensor[:, :, 1] * svd_size_tensor[:, :, 2], dim=1)
+        #     # Tổng hợp các giá trị trung bình của mỗi layer
+        #     num_element = th.sum(num_element_all)
+
+            
+        #     mem = (num_element*4)#/(1024*1024)
+        #     with open(os.path.join(self.logger.log_dir, "activation_memory_Byte.log"), "a") as file:
+        #         file.write(str(self.current_epoch) + "\t" + str(float(mem)) + "\n")
+        #     self.reset_svd_size()
+            
+            
+        # # Log activation memory at each epoch for HOSVD
+        # if self.with_HOSVD_with_var_compression:
+        #     device = th.device("cuda" if th.cuda.is_available() else "cpu")
+
+        #     # New way (optimized)
+        #     k_hosvd_tensor = th.tensor(self.k_hosvd[:4], device=device).float() # Chiều 1: dimension (4 cái k); chiều 2: k của từng batch của tất cả layer
+        #     k_hosvd_tensor = k_hosvd_tensor.view(4, -1, self.num_of_finetune) # Shape: 4 cái k, số batch, num_of_finetune
+        #     k_hosvd_tensor = k_hosvd_tensor.permute(2, 1, 0) # Shape: num_of_finetune, số batch, 4 cái k
+        #     k_hosvd_tensor = k_hosvd_tensor[:, :-self.num_of_validation_batch, :]
+
+        #     raw_shapes = th.tensor(self.k_hosvd[4], device=device).reshape(-1, self.num_of_finetune, 4) # Shape: num of batch, num_of_finetune, 4 chiều
+        #     raw_shapes = raw_shapes.permute(1, 0, 2) # Shape: num_of_finetune, num of batch, 4 chiều
+        #     raw_shapes = raw_shapes[:, :-self.num_of_validation_batch, :]
+        #     '''
+        #     Duyệt theo từng layer (chiều 1: num_of_finetune) -> Duyệt theo từng batch (chiều 2: số batch), tính số phần tử ở đây rồi suy ra trung bình số phần tử tại mỗi batch tại mỗi layer
+        #     -> Cộng tất cả ra trung bình số phần tử tại mỗi batch của các layer
+
+        #     '''
+        #     num_element_all = th.sum(
+        #         k_hosvd_tensor[:, :, 0] * k_hosvd_tensor[:, :, 1] * k_hosvd_tensor[:, :, 2] * k_hosvd_tensor[:, :, 3]
+        #         + k_hosvd_tensor[:, :, 0] * raw_shapes[:, :, 0]
+        #         + k_hosvd_tensor[:, :, 1] * raw_shapes[:, :, 1]
+        #         + k_hosvd_tensor[:, :, 2] * raw_shapes[:, :, 2]
+        #         + k_hosvd_tensor[:, :, 3] * raw_shapes[:, :, 3],
+        #         dim=1
+        #     )
+        #     num_element = th.sum(num_element_all) / k_hosvd_tensor.shape[1]
+
+        #     # # Old way
+        #     # k_hosvd_tensor = th.tensor(self.k_hosvd[:4]).float() # Chiều 1: dimension (4 cái k); chiều 2: k của từng batch của tất cả layer
+        #     # k_hosvd_tensor = k_hosvd_tensor.t()
+        #     # num_element = 0
+        #     # for i in range(self.num_of_finetune): # Duyệt qua các layer
+        #     #     raw_shape = self.k_hosvd[4][i] # Raw shape của activation map tại mỗi layer, đây là một tensor
+        #     #     selected_rows = k_hosvd_tensor[i::self.num_of_finetune] # 4 chuỗi k của một layer
+        #     #     num_element_all = 0
+        #     #     for row in selected_rows:
+        #     #         num_element_all += row[0] * row[1] * row[2] * row[3] \
+        #     #         + row[0] * raw_shape[0] + row[1] * raw_shape[1] \
+        #     #         + row[2] * raw_shape[2] + row[3] * raw_shape[3]
+        #     #     num_element += num_element_all/selected_rows.shape[0]
+
+               
+        #     mem = (num_element*4)#/(1024*1024)
+        #     with open(os.path.join(self.logger.log_dir, "activation_memory_Byte.log"), "a") as file:
+        #         file.write(str(self.current_epoch) + "\t" + str(float(mem)) + "\n")
+            
+        #     self.reset_k_hosvd() # Reset logged k which is used for logging memory for HOSVD
+        #     self.num_of_validation_batch = 0
+        
         with open(os.path.join(self.logger.log_dir, 'train_loss.log'), 'a') as f:
             mean_loss = th.stack([o['loss'] for o in outputs]).mean()
             f.write(f"{self.current_epoch} {mean_loss}")
@@ -438,6 +555,10 @@ class ClassificationModel(LightningModule):
             f.write("\n")
 
     def validation_step(self, val_batch, batch_idx):
+        
+        # self.num_of_validation_batch += 1
+
+
         img, label = val_batch['image'], val_batch['label']
         if img.shape[1] == 1:
             img = th.cat([img] * 3, dim=1)
@@ -511,6 +632,63 @@ class ClassificationModel(LightningModule):
 
                
             mem = (num_element*4)#/(1024*1024)
+            with open(os.path.join(self.logger.log_dir, "activation_memory_Byte.log"), "a") as file:
+                file.write(str(self.current_epoch) + "\t" + str(float(mem)) + "\n")
+        
+        if self.with_gkpd_hosvd:
+            device = th.device("cuda" if th.cuda.is_available() else "cpu")
+
+            # New way (optimized)
+            k_gkpd_hosvd_1_tensor = th.tensor(self.k_gkpd_hosvd_1[:4], device=device).float() # Chiều 1: dimension (4 cái k); chiều 2: k của từng batch của tất cả layer
+            k_gkpd_hosvd_1_tensor = k_gkpd_hosvd_1_tensor.view(4, -1, self.num_of_finetune) # Shape: 4 cái k, số batch, num_of_finetune
+            k_gkpd_hosvd_1_tensor = k_gkpd_hosvd_1_tensor.permute(2, 1, 0) # Shape: num_of_finetune, số batch, 4 cái k
+            
+
+            raw_shapes1 = th.tensor(self.k_gkpd_hosvd_1[4], device=device).reshape(-1, self.num_of_finetune, 5) # Shape: num of batch, num_of_finetune, 5 chiều
+            raw_shapes1 = raw_shapes1.permute(1, 0, 2) # Shape: num_of_finetune, num of batch, 5 chiều
+
+            '''
+            Duyệt theo từng layer (chiều 1: num_of_finetune) -> Duyệt theo từng batch (chiều 2: số batch), tính số phần tử ở đây rồi suy ra trung bình số phần tử tại mỗi batch tại mỗi layer
+            -> Cộng tất cả ra trung bình số phần tử tại mỗi batch của các layer
+
+            '''
+            num_element_all1 = th.sum(
+                k_gkpd_hosvd_1_tensor[:, :, 0] * k_gkpd_hosvd_1_tensor[:, :, 1] * k_gkpd_hosvd_1_tensor[:, :, 2] * k_gkpd_hosvd_1_tensor[:, :, 3]
+                + k_gkpd_hosvd_1_tensor[:, :, 0] * raw_shapes1[:, :, 1]
+                + k_gkpd_hosvd_1_tensor[:, :, 1] * raw_shapes1[:, :, 2]
+                + k_gkpd_hosvd_1_tensor[:, :, 2] * raw_shapes1[:, :, 3]
+                + k_gkpd_hosvd_1_tensor[:, :, 3] * raw_shapes1[:, :, 4]
+                + raw_shapes1[:, :, 0],
+                dim=1
+            )
+            num_element1 = th.sum(num_element_all1) / k_gkpd_hosvd_1_tensor.shape[1]
+
+            k_gkpd_hosvd_2_tensor = th.tensor(self.k_gkpd_hosvd_2[:4], device=device).float() # Chiều 1: dimension (4 cái k); chiều 2: k của từng batch của tất cả layer
+            k_gkpd_hosvd_2_tensor = k_gkpd_hosvd_2_tensor.view(4, -1, self.num_of_finetune) # Shape: 4 cái k, số batch, num_of_finetune
+            k_gkpd_hosvd_2_tensor = k_gkpd_hosvd_2_tensor.permute(2, 1, 0) # Shape: num_of_finetune, số batch, 4 cái k
+            
+
+            raw_shapes2 = th.tensor(self.k_gkpd_hosvd_2[4], device=device).reshape(-1, self.num_of_finetune, 5) # Shape: num of batch, num_of_finetune, 5 chiều
+            raw_shapes2 = raw_shapes2.permute(1, 0, 2) # Shape: num_of_finetune, num of batch, 4 chiều
+
+            '''
+            Duyệt theo từng layer (chiều 1: num_of_finetune) -> Duyệt theo từng batch (chiều 2: số batch), tính số phần tử ở đây rồi suy ra trung bình số phần tử tại mỗi batch tại mỗi layer
+            -> Cộng tất cả ra trung bình số phần tử tại mỗi batch của các layer
+
+            '''
+            num_element_all2 = th.sum(
+                k_gkpd_hosvd_2_tensor[:, :, 0] * k_gkpd_hosvd_2_tensor[:, :, 1] * k_gkpd_hosvd_2_tensor[:, :, 2] * k_gkpd_hosvd_2_tensor[:, :, 3]
+                + k_gkpd_hosvd_2_tensor[:, :, 0] * raw_shapes2[:, :, 1]
+                + k_gkpd_hosvd_2_tensor[:, :, 1] * raw_shapes2[:, :, 2]
+                + k_gkpd_hosvd_2_tensor[:, :, 2] * raw_shapes2[:, :, 3]
+                + k_gkpd_hosvd_2_tensor[:, :, 3] * raw_shapes2[:, :, 4]
+                + raw_shapes2[:, :, 0],
+                dim=1
+            )
+            num_element2 = th.sum(num_element_all2) / k_gkpd_hosvd_2_tensor.shape[1]
+
+               
+            mem = (num_element1+num_element2)*4
             with open(os.path.join(self.logger.log_dir, "activation_memory_Byte.log"), "a") as file:
                 file.write(str(self.current_epoch) + "\t" + str(float(mem)) + "\n")
 

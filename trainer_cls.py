@@ -45,11 +45,10 @@ def run():
     if cli.config['checkpoint'] is not None and cli.config['checkpoint'] != 'None':
         # trainer.validate(model, datamodule=data, ckpt_path=cli.config['checkpoint'])
         trainer.fit(model, data, ckpt_path=cli.config['checkpoint'])
-        # trainer.validate(model, datamodule=data)
     else:
         # trainer.validate(model, datamodule=data)
         trainer.fit(model, data)
-        # trainer.validate(model, datamodule=data)
+    # trainer.validate(model, datamodule=data)
 
 
 run()
