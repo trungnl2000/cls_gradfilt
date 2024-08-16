@@ -56,9 +56,7 @@ class Conv2dHOSVDop_with_var(Function):
     @staticmethod
     def forward(ctx: Any, *args: Any, **kwargs: Any) -> Any:
         input, weight, bias, stride, dilation, padding, groups, var, k_hosvd = args
-
         output = conv2d(input, weight, bias, stride, padding, dilation=dilation, groups=groups)
-
 
         S, u_list = hosvd(input, var=var)
         u0, u1, u2, u3 = u_list # B, C, H, W
@@ -77,11 +75,8 @@ class Conv2dHOSVDop_with_var(Function):
 
     @staticmethod
     def backward(ctx: Any, *grad_outputs: Any) -> Any:
-
         S, u0, u1, u2, u3, weight, bias  = ctx.saved_tensors
-        
         B, C, H, W = u0.shape[0], u1.shape[0], u2.shape[0], u3.shape[0]
-
         stride = ctx.stride
         padding = ctx.padding 
         dilation = ctx.dilation
@@ -98,68 +93,25 @@ class Conv2dHOSVDop_with_var(Function):
             u2_padded = pad(u2, (0, 0, padding[0], padding[0]))
             u3_padded = pad(u3, (0, 0, padding[0], padding[0]))
 
-            # Calculate Z1:
-            '''
-            u0: B, K[0] -> B, K[0], 1, 1, 1
-            grad_output: (B, groups*out_channels_per_group+out_channels_per_group, H_prime, W_prime) -> (B, 1, groups*out_channels_per_group+out_channels_per_group, H_prime, W_prime)
-            '''
-            # Z1 = th.sum(u0.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1) * grad_output.unsqueeze(1), dim=0)  # Shape: (K[0], groups*out_channels_per_group+out_channels_per_group, H_prime, W_prime)
-            Z1 = th.einsum("bk,bchw->bkchw", u0, grad_output).sum(dim=0) # Shape: (K[0], groups*out_channels_per_group+out_channels_per_group, H_prime, W_prime)
+            # Calculate Z1: (conv1x1)
+            Z1 = conv2d(grad_output.permute(1,0,2,3), u0.T.unsqueeze(-1).unsqueeze(-1), groups=1).permute(1, 0, 2, 3) # Shape (C', B, H', W') conv with (K0, B', 1, 1) -> (C', K0, H', W') -> (K0, C', H', W')
             #______________________________________________________________________________________________________________
-            # Calculate Z2:
-            '''
-            S:              shape: K[0], K[1], K[2], K[3]   ->  K[0], K[1], 1, K[2], K[3]
-            u2_padded:      shape: H_padded, K[2]           ->  1, 1, H_padded, K[2], 1
-            '''
-            # Z2 = (S.unsqueeze(2) * u2_padded.unsqueeze(0).unsqueeze(1).unsqueeze(-1)).sum(dim=3) # Shape: K[0], K[1], H_padded, K[3]
-            Z2 = th.einsum("abcd,hc->abhcd", S, u2_padded).sum(dim=3) # Shape: K[0], K[1], H_padded, K[3]
+            # Calculate Z2: (conv1x1)
+            Z2 = conv2d(S.permute(3, 2, 0, 1), u2_padded.unsqueeze(-1).unsqueeze(-1), groups=1).permute(2, 3, 1, 0) # Shape (K3, K2, K0, K1) conv with (H_padded, K2, 1, 1) -> (K3, H_padded, K0, K1) -> (K0, K1, H_padded, K3)
             #______________________________________________________________________________________________________________
-            # Calculate Z3:
-            '''
-            Z2:         K[0], K[1], H_padded, K[3]  -> K[0], K[1], H_padded, 1, K[3]
-            u3_padded:  W_padded, K[3]              -> 1, 1, 1, W_padded, K[3]
-            '''
-            # Z3 = (Z2.unsqueeze(3) * u3_padded.unsqueeze(0).unsqueeze(0).unsqueeze(0)).sum(dim=4) # Shape: K[0], K[1], H_padded, W_padded
-            Z3 = th.einsum("abhd,wd->abhwd", Z2, u3_padded).sum(dim=4) # Shape: K[0], K[1], H_padded, W_padded
+            # Calculate Z3: (conv1x1)
+            Z3 = conv2d(Z2.permute(2, 3, 0, 1), u3_padded.unsqueeze(-1).unsqueeze(-1), groups=1).permute(2, 3, 0, 1) # Shape (H_padded, K3, K0, K1) conv with (W_padded, K3, 1, 1) -> (H_padded, W_padded, K0, K1) -> (K0, K1, H_padded, W_padded)
             #______________________________________________________________________________________________________________
-            # Calculate Z4
-            # Create indices m, k, n, l
-            m_indices = th.arange(H_prime, device=Z3.device) * stride[0]
-            k_indices = th.arange(K_H, device=Z3.device) * dilation[0]
-            # n_indices = th.arange(W_prime) * stride[0]
-            # l_indices = th.arange(K_W) * dilation[0]
-            # Create grid of m, k, n, l
-            m_grid, k_grid = th.meshgrid(m_indices, k_indices, indexing='ij')
-            # n_grid, l_grid = th.meshgrid(n_indices, l_indices, indexing='ij',device=Z3.device)
-
-            # Create combination of mk and nl
-            combined_indices_m_k = (m_grid + k_grid).t().flatten()
-            # combined_indices_n_l = (n_grid + l_grid).t().flatten()
-            # Choose Z3
-            Z3_selected = Z3[:, :, combined_indices_m_k, :].reshape(Z3.shape[0], Z3.shape[1], K_H, H_prime, Z3.shape[3]) # Shape: K[0], K[1], duyệt qua mk, W_padded -> K[0], K[1], K_H, H_prime, W_padded
-            Z3_selected = Z3_selected[:, :, :, :, combined_indices_m_k].reshape(Z3.shape[0], Z3.shape[1], K_H, H_prime, K_W, W_prime) # Shape: K[0], K[1], K_H, H_prime, duyệt qua nl -> K[0], K[1], K_H, H_prime, K_W, W_prime
-            # Z3_selected = Z3_selected[:, :, :, :, combined_indices_n_l].reshape(Z3.shape[0], Z3.shape[1], K_H, H_prime, K_W, W_prime) # Shape: K[0], K[1], K_H, H_prime, duyệt qua nl -> K[0], K[1], K_H, H_prime, K_W, W_prime
-            # Tính Z4
-            '''
-            Z3: K[0], K[1], K_H, H_prime, K_W, W_prime  -> K[0], 1, K[1], K_H, H_prime, K_W, W_prime
-            Z1: K[0], Cg_prime, H_prime, W_prime        -> K[0], Cg_prime, 1, 1, H_prime, 1, W_prime
-            '''
-            # Z4 = (Z3_selected.unsqueeze(1)*Z1.unsqueeze(2).unsqueeze(3).unsqueeze(5)).sum(dim=0).sum(dim=3).sum(dim=4) # Shape: K[0], Cg_prime, K[1], K_H, H_prime, K_W, W_prime -> Cg_prime, K[1], K_H, K_W,
-            Z4 = th.einsum("abkhlw,achw->acbkhlw", Z3_selected, Z1).sum(dim=0).sum(dim=3).sum(dim=4) # Shape: K[0], Cg_prime, K[1], K_H, H_prime, K_W, W_prime -> Cg_prime, K[1], K_H, K_W,
-            
+            # Calculate Z4 (conv2d)
+            Z4 = conv2d(Z3.permute(1, 0, 2, 3), Z1.permute(1, 0, 2, 3), groups=1).permute(1, 0, 2, 3) # Shape (K1, K0, H_padded, W_padded) conv with (C', K0, H', W') --> (K1, C', K_H, K_W) -> (C', K1, K_H, K_W)
             #______________________________________________________________________________________________________________
             # calculate grad_weight
             if groups == C == C_prime:
-                # grad_weight = (Z4 * u1.unsqueeze(-1).unsqueeze(-1)).sum(dim=1).unsqueeze(1)
-                grad_weight = th.einsum("ckhw,ck->ckhw", Z4, u1).sum(dim=1).unsqueeze(1)
+                grad_weight = th.einsum("ckhw,ck->ckhw", Z4, u1).sum(dim=1).unsqueeze(1) # C', 1, K_H, K_W
             elif groups == 1:
-                # Z4_expanded = Z4.unsqueeze(1) #Shape Cg_prime, K[1], K_H, K_W -> Cg_prime, 1, K[1], K_H, K_W
-                # u1_expanded = u1.unsqueeze(0).unsqueeze(-1).unsqueeze(-1)  #Shape Cg, K[1] -> 1, Cg, K[1], 1, 1
-                # grad_weight = (Z4_expanded * u1_expanded).sum(dim=2)
-                grad_weight = th.einsum("ckhw,gk->cgkhw", Z4, u1).sum(dim=2)
+                grad_weight = conv2d(Z4, u1.unsqueeze(-1).unsqueeze(-1), groups=1) # C', K1, K_H, K_W conv with C, K1, 1, 1 -> C', C, K_H, K_W
             else: # Havent tensorlize
                 print("Havent optimized")
-
 
         if bias is not None and ctx.needs_input_grad[2]:
             grad_bias = grad_output.sum((0,2,3)).squeeze(0)
